@@ -28,6 +28,12 @@
  *
  * 【不支援】
  *   檔案上傳欄位（需改為先轉成 base64 字串再傳送）
+ *
+ * 【登入通行證（2026-11 新增，選用）】
+ *   需要後台密碼的頁面可設定：
+ *     window.gasAuthToken       字串或回傳字串的函式，會隨每次請求送到後端
+ *     window.gasOnAuthRequired  後端回報 authRequired 時呼叫，用來顯示登入畫面
+ *   沒設定這兩個變數的頁面，行為與舊版完全相同。
  * ============================================================
  */
 (function () {
@@ -68,6 +74,16 @@
   }
 
   /**
+   * 取得登入通行證（需要後台密碼的系統才會設定）
+   * 頁面可設定 window.gasAuthToken 為字串，或回傳字串的函式；沒設定時送出空字串
+   */
+  function currentToken() {
+    var t = window.gasAuthToken;
+    try { if (typeof t === 'function') t = t(); } catch (e) { t = ''; }
+    return typeof t === 'string' ? t : '';
+  }
+
+  /**
    * 實際送出請求到 GAS doPost
    * 使用 text/plain 是為了避免瀏覽器發出 CORS 預檢（GAS 不處理 OPTIONS）
    */
@@ -78,7 +94,7 @@
     return fetch(GAS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ fn: fnName, args: args.map(normalizeArg) }),
+      body: JSON.stringify({ fn: fnName, args: args.map(normalizeArg), token: currentToken() }),
       signal: controller ? controller.signal : undefined
     })
       .then(function (res) {
@@ -93,7 +109,13 @@
         } catch (e) {
           throw new Error('後端回傳格式錯誤，可能是 GAS 部署設定或配額問題。');
         }
-        if (!result.ok) throw new Error(result.error || '後端執行失敗');
+        if (!result.ok) {
+          // 後端回報需要登入：交給頁面的登入處理（有設定 window.gasOnAuthRequired 才會呼叫）
+          if (result.authRequired && typeof window.gasOnAuthRequired === 'function') {
+            try { window.gasOnAuthRequired(result.error); } catch (e) {}
+          }
+          throw new Error(result.error || '後端執行失敗');
+        }
         return result.data;
       })
       .finally(function () {

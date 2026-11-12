@@ -6,13 +6,11 @@
   <title>電視牆跑馬燈申請管理後台</title>
   <!--
     ===== GitHub Pages 版設定（2026-11 由 GAS HtmlService 搬出） =====
-    1. GAS_URL 與前台 index.html 相同（同一個 GAS 專案），修改時兩個檔案都要改。
+    1. GAS 後端網址寫在同資料夾的 config.js（前台、後台共用，只需改一處）。
     2. gas-shim.js 模擬 google.script.run，下方 api()／adminApi() 不需修改。
     3. 後端以 'AUTH:'、'STALE:' 開頭的錯誤訊息會原樣傳回，登入失效與資料過期的處理照常運作。
   -->
-  <script>
-    window.GAS_URL = 'https://script.google.com/macros/s/AKfycbz7bNL4Wl_HyXTaVoMdUrFW7zqO1V7nClpFPFKLCNsj9B9YR9ecVm7ITtdL8_kVBIfWdw/exec';
-  </script>
+  <script src="./config.js?v=1"></script>
   <script src="../shared/gas-shim.js?v=3"></script>
 <!-- 管院後台共用登入：一次登入，所有系統後台通行（設定說明見 shared/admin-sso.js） -->
 <script>window.CM_ADMIN = {"tokenKey": "tvWallAdminToken", "loginFn": "adminLogin", "logoutFn": "adminLogout"};</script>

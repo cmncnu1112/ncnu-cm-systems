@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!--
-  ===== GitHub Pages 版設定（2026-11 由 GAS HtmlService 搬出）：管理端 =====
+  ===== GitHub Pages 版設定（2026-11 由 GAS HtmlService 搬出）：管理端（需後台密碼，登入畫面在檔案最下方） =====
   1. GAS 後端網址統一寫在同資料夾的 config.js，四個頁面共用，只需改一處。
   2. gas-shim.js 模擬 google.script.run，頁面內原本的 server() 寫法不需修改。
   3. 修改 config.js 或 gas-shim.js 後，請把 ?v= 後面的數字加 1，避免讀到舊檔。
 -->
 <script src="./config.js?v=1"></script>
-<script src="../shared/gas-shim.js?v=1"></script>
+<script src="../shared/gas-shim.js?v=2"></script>
 <title>暨大管理學院｜教室空間管理系統｜管理端</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
@@ -5708,6 +5708,112 @@ async function exportCleaningRoster_(format){
   }
 })();
 
+</script>
+<!-- =====================================================================
+     管理端後台密碼（2026-11 新增）
+     ---------------------------------------------------------------------
+     ‧ 開啟頁面時沒有通行證就顯示登入畫面；讀取課表不受影響，寫入一律需要登入。
+     ‧ 通行證存在 sessionStorage，關閉分頁即失效；6 小時沒操作後端也會讓它失效。
+     ‧ 後端回報 authRequired 時（逾時、改密碼後強制登出），自動跳回登入畫面。
+     ‧ 樣式比照管院 Carbon 模板：深藍 #1e3a8a、直角、無陰影。
+     ===================================================================== -->
+<style>
+  #clsLoginOverlay{position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(22,22,22,.55)}
+  #clsLoginOverlay.open{display:flex}
+  #clsLoginOverlay .cls-card{width:100%;max-width:400px;background:#ffffff;color:#161616;font-family:"IBM Plex Sans","Microsoft JhengHei","微軟正黑體",sans-serif}
+  #clsLoginOverlay .cls-head{background:#1e3a8a;color:#ffffff;padding:16px 20px}
+  #clsLoginOverlay .cls-head small{display:block;font-size:12px;opacity:.75;letter-spacing:.32px}
+  #clsLoginOverlay .cls-head h3{margin:2px 0 0;font-size:20px;font-weight:400}
+  #clsLoginOverlay form{padding:16px 20px 20px}
+  #clsLoginOverlay label{display:block;font-size:12px;letter-spacing:.32px;color:#525252;margin-bottom:6px}
+  #clsLoginOverlay input{box-sizing:border-box;width:100%;height:40px;padding:0 12px;border:0;border-bottom:1px solid #8d8d8d;border-radius:0;background:#f4f4f4;color:#161616;font-size:14px;letter-spacing:2px}
+  #clsLoginOverlay input:focus{outline:2px solid #1e3a8a;outline-offset:-2px}
+  #clsLoginOverlay .cls-help{font-size:12px;color:#6f6f6f;margin:6px 0 0}
+  #clsLoginOverlay .cls-err{font-size:12px;color:#a2191f;min-height:18px;margin:8px 0 0}
+  #clsLoginOverlay button{width:100%;height:48px;margin-top:12px;border:0;border-radius:0;background:#1e3a8a;color:#ffffff;font-size:14px;text-align:left;padding:0 16px;cursor:pointer}
+  #clsLoginOverlay button:hover{background:#172b66}
+  #clsLoginOverlay button:disabled{background:#c6c6c6;color:#8d8d8d;cursor:not-allowed}
+  #clsLogoutBtn{position:fixed;right:16px;bottom:16px;z-index:2147482000;height:32px;padding:0 12px;border:1px solid #e0e0e0;border-radius:0;background:#ffffff;color:#161616;font-size:12px;cursor:pointer;display:none}
+  #clsLogoutBtn:hover{background:#e8e8e8}
+</style>
+<div id="clsLoginOverlay" role="dialog" aria-modal="true" aria-labelledby="clsLoginTitle">
+  <div class="cls-card">
+    <div class="cls-head"><small>ADMIN LOGIN</small><h3 id="clsLoginTitle">登入教室管理端</h3></div>
+    <form id="clsLoginForm" autocomplete="off">
+      <label for="clsLoginPwd">後台密碼 *</label>
+      <input type="password" id="clsLoginPwd" autocomplete="current-password">
+      <p class="cls-help">密碼由院辦管理。登入後 6 小時內沒有操作會自動登出。</p>
+      <p class="cls-err" id="clsLoginErr" role="alert"></p>
+      <button type="submit" id="clsLoginBtn">登入</button>
+    </form>
+  </div>
+</div>
+<button type="button" id="clsLogoutBtn" title="登出管理端">登出後台</button>
+<script>
+(function () {
+  'use strict';
+  var TOKEN_KEY = 'classroomAdminToken';
+  var token = '';
+
+  /* 讀寫通行證：iframe 內若瀏覽器擋 sessionStorage，退回只存在記憶體 */
+  function loadToken() { try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } }
+  function saveToken(t) {
+    token = t || '';
+    try { token ? sessionStorage.setItem(TOKEN_KEY, token) : sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+    document.getElementById('clsLogoutBtn').style.display = token ? 'inline-flex' : 'none';
+  }
+
+  /* 提供給 gas-shim.js：每次請求都帶上通行證 */
+  window.gasAuthToken = function () { return token; };
+
+  /* 顯示登入畫面；msg 為提示文字（例如逾時原因） */
+  function showLogin(msg) {
+    saveToken('');
+    document.getElementById('clsLoginErr').textContent = msg || '';
+    document.getElementById('clsLoginOverlay').classList.add('open');
+    var pwd = document.getElementById('clsLoginPwd');
+    pwd.value = '';
+    setTimeout(function () { pwd.focus(); }, 0);
+  }
+  function hideLogin() { document.getElementById('clsLoginOverlay').classList.remove('open'); }
+
+  /* 提供給 gas-shim.js：後端說通行證失效時呼叫 */
+  window.gasOnAuthRequired = function (msg) { showLogin(msg); };
+
+  /* 送出登入 */
+  document.getElementById('clsLoginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var pwdEl = document.getElementById('clsLoginPwd');
+    var errEl = document.getElementById('clsLoginErr');
+    var btn = document.getElementById('clsLoginBtn');
+    if (!pwdEl.value) { errEl.textContent = '請輸入密碼。'; pwdEl.focus(); return; }
+    btn.disabled = true; btn.textContent = '處理中…'; errEl.textContent = '';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false; btn.textContent = '登入';
+        if (!res || !res.token) { errEl.textContent = '登入失敗，請再試一次。'; return; }
+        saveToken(res.token);
+        pwdEl.value = '';
+        hideLogin();
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false; btn.textContent = '登入';
+        errEl.textContent = (err && err.message) ? err.message : String(err);
+        pwdEl.select();
+      })
+      .adminLogin(pwdEl.value);
+  });
+
+  /* 登出：先在畫面上登出，後端作廢通行證不必等回應 */
+  document.getElementById('clsLogoutBtn').addEventListener('click', function () {
+    google.script.run.withFailureHandler(function () {}).adminLogout();
+    showLogin('已登出。');
+  });
+
+  /* 初始化：有通行證就直接使用（失效時第一次寫入會自動跳回登入），沒有就顯示登入畫面 */
+  token = loadToken();
+  if (token) saveToken(token); else showLogin('');
+})();
 </script>
 </body>
 </html>

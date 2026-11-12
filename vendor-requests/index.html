@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>對外廠商請購管理</title>
+  <!--
+    ===== GitHub Pages 版設定（2026-11 由 GAS HtmlService 搬出） =====
+    1. GAS 後端網址寫在同資料夾的 config.js。
+    2. gas-shim.js 模擬 google.script.run，下方 rawApi()／api() 不需修改。
+    3. 修改 config.js 或 gas-shim.js 後，請把 ?v= 後面的數字加 1，避免讀到舊檔。
+  -->
+  <script src="./config.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=1"></script>
+  <!-- 英數字字型 IBM Plex Sans；中文自動落到微軟正黑體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    /* =========================================================
+       管院行政系統 起手模板（依鑰匙設備庫存後台 V2.5.6 實際呈現值）
+       結構採 Carbon Design System；色彩採管院深藍＋琥珀橘。
+       本檔不依賴 Tailwind，可直接當成新系統的 HTML 起點。
+       ========================================================= */
+    :root{
+      /* ---------- 品牌色 ---------- */
+      --navy:#1e3a8a;        /* 主色：頂欄、主要按鈕、選取線、勾選框 */
+      --navy-dark:#172b66;   /* 主色滑過 */
+      --navy-press:#0f1d45;  /* 主色按下 */
+      --navy-soft:#e8eefc;   /* 淡藍：品牌類小標籤 */
+      --floor-row:#edf1fb;   /* 表格分組列 */
+      --amber:#d97706;       /* 琥珀橘：徽章、警示數字、提示條色條 */
+
+      /* ---------- 中性色（Carbon Gray 10） ---------- */
+      --bg:#f4f4f4;            /* 頁面背景 */
+      --layer:#ffffff;         /* 面板、表格、抽屜 */
+      --field:#f4f4f4;         /* 輸入框底色 */
+      --layer-hover:#e8e8e8;   /* 滑過 */
+      --layer-active:#e0e0e0;  /* 表頭、選取底色 */
+      --border-subtle:#e0e0e0; /* 細分隔線 */
+      --border-strong:#8d8d8d; /* 輸入框底線 */
+      --disabled:#c6c6c6;      /* 停用 */
+      --placeholder:#a8a8a8;   /* 提示文字 */
+      --ink:#161616;           /* 主要文字 */
+      --muted:#525252;         /* 次要文字 */
+      --helper:#6f6f6f;        /* 說明文字 */
+      --focus:var(--navy);     /* 聚焦框 */
+
+      /* ---------- 狀態色（底色／文字） ---------- */
+      --ok-bg:#defbe6;   --ok:#0e6027;    /* 可用、開放、白名單 */
+      --out-bg:#fff1f1;  --out:#a2191f;   /* 佔用、黑名單、異常 */
+      --warn-bg:#fcf4d6; --warn:#8e6a00;  /* 待處理；提示條底色 */
+      --mute-bg:#e0e0e0; --mute:#161616;  /* 一般、不適用 */
+
+      /* ---------- 危險操作 ---------- */
+      --danger:#da1e28;
+      --danger-hover:#b81921;
+      --danger-row:#fff1f1;
+      --danger-row-hover:#ffd7d9;
+
+      /* ---------- 提示訊息 ---------- */
+      --toast-ok:#059669;
+      --toast-err:#e11d48;
+      --toast-info:#262626;
+    }
+
+    /* ===== 基礎 ===== */
+    *{box-sizing:border-box;margin:0;padding:0}
+    body,button,input,select,textarea{
+      font-family:"IBM Plex Sans","Microsoft JhengHei","微軟正黑體",ui-sans-serif,system-ui,sans-serif;
+      letter-spacing:.16px;
+    }
+    body{background:var(--bg);color:var(--ink);font-size:14px;min-height:100vh}
+    .rounded-circle{border-radius:50%}   /* 唯一允許的圓形：步驟數字、轉圈 */
+
+    /* ===== Lucide 圖示 ===== */
+    .licon{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex-shrink:0;stroke-width:2}
+    .licon-sm{width:1em;height:1em}
+    .licon-lg{width:1.5em;height:1.5em}
+    .licon-xl{width:2.5rem;height:2.5rem}
+
+    /* ===== 頂欄：48px 深藍 ===== */
+    .topbar{position:sticky;top:0;z-index:30;height:48px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:16px;padding:0 16px}
+    .topbar h1{font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .topbar .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .topbar .updated{font-size:11px;color:#c6c6c6;display:none}
+    .topbar .btn-top{height:32px;padding:0 12px;border:0;background:#fff;color:var(--ink);font-size:12px;font-weight:900;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+    @media (min-width:640px){
+      .topbar{padding:0 24px}
+      .topbar h1{font-size:16px}
+      .topbar .updated{display:inline}
+    }
+
+    /* ===== 外框：側欄＋主區 ===== */
+    .shell{display:flex;flex-direction:column;align-items:flex-start;width:100%}
+    @media (min-width:768px){.shell{flex-direction:row}}
+
+    /* ===== 側欄：桌機 208px 直向；手機橫向頁籤 ===== */
+    .nav-v2{width:100%;background:var(--layer);padding:8px 0;display:flex;overflow-x:auto;border-bottom:1px solid var(--border-subtle)}
+    .nav-btn{flex:0 0 auto;height:40px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:none;border:0;color:var(--muted);font-size:14px;text-align:left;cursor:pointer;white-space:nowrap}
+    .nav-btn:hover{background:var(--layer-hover);color:var(--ink)}
+    .nav-btn.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--navy)}   /* 手機：底部 2px 線 */
+    .nav-btn .count{height:18px;line-height:18px;min-width:20px;padding:0 6px;font-size:12px;text-align:center;background:var(--amber);color:#fff}
+    @media (min-width:768px){
+      .nav-v2{width:208px;flex-shrink:0;flex-direction:column;position:sticky;top:48px;align-self:flex-start;min-height:calc(100vh - 48px);overflow:visible;border-bottom:0}
+      .nav-btn{width:100%}
+      .nav-btn.on{background:var(--layer-active);box-shadow:inset 3px 0 0 var(--navy)}  /* 桌機：左側 3px 線 */
+    }
+
+    /* ===== 主區：一定要 w-full + min-w-0，避免寬表格撐破手機版面 ===== */
+    .main{flex:1;min-width:0;width:100%;padding:16px;display:flex;flex-direction:column;gap:16px}
+    @media (min-width:640px){.main{padding:24px}}
+
+    /* ===== KPI 磚：2／3／5 欄，間隔 1px 露出背景色 ===== */
+    .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--bg)}
+    @media (min-width:640px){.kpis{grid-template-columns:repeat(3,1fr)}}
+    @media (min-width:1024px){.kpis{grid-template-columns:repeat(5,1fr)}}
+    .kpi{background:var(--layer);padding:16px}
+    .kpi small{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted)}
+    .kpi b{display:block;font-size:28px;font-weight:600;line-height:1.4;padding-top:2px;margin-top:2px;color:var(--navy);font-variant-numeric:tabular-nums}
+    .kpi.alert b{color:var(--amber)}
+
+    /* ===== 需要處理提示條 ===== */
+    .attn{background:var(--warn-bg);border-left:3px solid var(--amber);padding:12px 16px;font-size:14px;display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center}
+    .attn strong{font-weight:600}
+    .attn a{color:var(--navy);text-decoration:underline;cursor:pointer}
+
+    /* ===== 面板與工具列 ===== */
+    .panel-v2{background:var(--layer)}
+    .toolbar-v2{min-height:48px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px}
+    .toolbar-v2 h2{font-size:20px;font-weight:400}
+    .toolbar-v2 .sp{flex:1}
+
+    /* ===== 輸入框：無外框、底線、聚焦 2px 深藍內框 ===== */
+    input[type=text],input[type=search],input[type=tel],input[type=number],input[type=date],input[type=password],select,textarea{
+      border:0;border-bottom:1px solid var(--border-strong);border-radius:0;background:var(--field);color:var(--ink);font-size:14px;padding:0 12px;
+    }
+    input:focus,select:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:-2px}
+    input::placeholder,textarea::placeholder{color:var(--placeholder)}
+    input:disabled,select:disabled,textarea:disabled{color:#8d8d8d;border-bottom-color:transparent;cursor:not-allowed}
+    .field-v2{height:32px;min-width:200px}
+
+    /* ===== 按鈕：small 32px；抽屜底部 large 48px ===== */
+    .btn-v2{height:32px;padding:0 16px;border:0;border-radius:0;font-size:14px;font-weight:400;letter-spacing:.16px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;cursor:pointer;transition:background .07s;vertical-align:middle}
+    .btn-v2 + .btn-v2{margin-left:4px}
+    .btn-v2.pri{background:var(--navy);color:#fff}
+    .btn-v2.pri:hover{background:var(--navy-dark)}
+    .btn-v2.pri:active{background:var(--navy-press)}
+    .btn-v2.ghost{background:transparent;color:var(--navy)}
+    .btn-v2.ghost:hover{background:var(--layer-hover)}
+    .btn-v2.danger{background:var(--danger);color:#fff}
+    .btn-v2.danger:hover{background:var(--danger-hover)}
+    .btn-v2.danger-ghost{background:transparent;color:var(--danger)}
+    .btn-v2.danger-ghost:hover{background:var(--danger);color:#fff}
+    .btn-v2:disabled{background:var(--disabled)!important;color:#8d8d8d!important;cursor:not-allowed}
+    button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;box-shadow:inset 0 0 0 3px #fff}
+
+    /* ===== 資料表格 ===== */
+    .table-wrap{overflow-x:auto}   /* 手機：只有表格自己橫向捲動 */
+    .table-v2{width:100%;min-width:800px;border-collapse:collapse}
+    .table-v2 th{height:48px;background:var(--layer-active);text-align:left;font-size:14px;font-weight:600;padding:0 16px;white-space:nowrap}
+    .table-v2 td{height:48px;padding:6px 16px;font-size:14px;vertical-align:middle;border-bottom:1px solid var(--border-subtle)}
+    .table-v2 td:last-child{width:1%;white-space:nowrap}   /* 操作欄：最後一欄、不換行 */
+    .table-v2 tbody tr:not(.floor-v2):hover{background:var(--layer-hover)}
+    .table-v2 td .sub{display:block;font-size:12px;color:var(--muted)}
+    .floor-v2 td{background:var(--floor-row);color:var(--navy);font-weight:600}
+    .table-v2 tbody tr.row-blacklist{background:var(--danger-row)}
+    .table-v2 tbody tr.row-blacklist:hover{background:var(--danger-row-hover)}
+    .table-v2 tbody tr.row-disabled td{color:#8d8d8d}
+
+    /* ===== 狀態標籤與小標籤：直角、淡底深字 ===== */
+    .tag-v2{display:inline-block;height:24px;line-height:24px;padding:0 8px;font-size:12px;white-space:nowrap}
+    .tag-v2.ok{background:var(--ok-bg);color:var(--ok)}
+    .tag-v2.out{background:var(--out-bg);color:var(--out)}
+    .tag-v2.warn{background:var(--warn-bg);color:var(--warn)}
+    .tag-v2.mute{background:var(--mute-bg);color:var(--mute)}
+    .chip-v2{display:inline-block;height:24px;line-height:24px;padding:0 8px;font-size:12px;margin:2px 4px 2px 0;white-space:nowrap}
+    .chip-v2.key{background:var(--navy-soft);color:var(--navy)}
+    .chip-v2.eq{background:var(--layer-active);color:var(--ink)}
+
+    /* ===== 勾選框（取代開關） ===== */
+    .check-v2{display:flex;align-items:flex-start;gap:10px;cursor:pointer;user-select:none;position:relative}
+    .check-v2 input{position:absolute;opacity:0;width:1px;height:1px}
+    .check-box{flex-shrink:0;position:relative;width:18px;height:18px;margin-top:2px;border:1px solid #161616;border-radius:2px;background:#fff;transition:background .07s}
+    .check-v2 input:checked + .check-box{background:var(--navy);border-color:var(--navy)}
+    .check-v2 input:checked + .check-box::after{content:'';position:absolute;left:5px;top:1px;width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+    .check-v2 input:focus-visible + .check-box{outline:2px solid var(--focus);outline-offset:1px}
+    .check-v2:hover .check-box{border-color:var(--navy)}
+    .check-v2 input:disabled + .check-box{border-color:var(--disabled);background:var(--bg)}
+    .check-v2 input:disabled ~ .check-text{color:#8d8d8d;cursor:not-allowed}
+    .check-text{display:flex;flex-direction:column;gap:2px;font-size:14px}
+    .check-text small{font-size:12px;color:var(--helper)}
+
+    /* ===== 單選列表 ===== */
+    .radio-group-v2{display:grid;border-top:1px solid var(--border-subtle)}
+    .radio-v2{display:flex;gap:12px;align-items:flex-start;padding:12px 4px;border-bottom:1px solid var(--border-subtle);cursor:pointer}
+    .radio-v2:hover{background:var(--layer-hover)}
+    .radio-v2 input{width:18px;height:18px;margin-top:2px;accent-color:var(--navy);flex-shrink:0}
+    .radio-v2 span{display:flex;flex-direction:column;gap:2px;font-size:14px}
+    .radio-v2 small{font-size:12px;color:var(--helper)}
+
+    /* ===== 抽屜：桌機貼右 400px；1024px 以下置中彈窗 ===== */
+    .overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,23,.4);backdrop-filter:blur(4px)}
+    .overlay.open{display:flex}
+    .overlay.danger-layer{z-index:60}   /* 刪除確認要蓋過抽屜 */
+    .drawer-v2{width:100%;max-width:576px;max-height:90vh;background:var(--layer);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.25)}
+    .drawer-v2.sm{max-width:448px}
+    @media (min-width:1024px){
+      .overlay.side{padding:0;justify-content:flex-end;align-items:stretch;background:transparent;backdrop-filter:none}
+      .overlay.side .drawer-v2{width:400px;max-width:400px;max-height:none;height:100%;box-shadow:-8px 0 24px rgba(15,23,42,.10)}
+    }
+    .drawer-v2 header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;background:var(--navy);color:#fff}
+    .drawer-v2 header.danger{background:var(--danger)}
+    .drawer-v2 header small{font-size:12px;opacity:.75}
+    .drawer-v2 header h3{font-size:20px;font-weight:400;margin-top:2px}
+    .drawer-close{width:32px;height:32px;border:0;background:transparent;color:#fff;cursor:pointer;flex-shrink:0;font-size:16px}
+    .drawer-close:hover{background:rgba(255,255,255,.12)}
+    .drawer-v2 .body{flex:1;overflow-y:auto;padding:16px 20px}
+    .drawer-v2 .field-group{margin-top:16px}
+    .drawer-v2 .field-group:first-child{margin-top:0}
+    .drawer-v2 .field-label{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted);margin-bottom:6px}
+    .drawer-v2 .field-help{font-size:12px;letter-spacing:.32px;color:var(--helper);margin-top:4px}
+    /* 勾選框與單選鈕不套用 40px 整寬，否則會被撐大 */
+    .drawer-v2 input:not([type=radio]):not([type=checkbox]),.drawer-v2 select{height:40px;width:100%}
+    .drawer-v2 textarea{width:100%;padding:10px 12px;resize:vertical}
+    .drawer-v2 .row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-subtle)}
+    .drawer-v2 .row .nm{flex:1;min-width:0}
+    .drawer-v2 .row .nm b{display:flex;align-items:center;gap:6px}
+    .drawer-v2 .row .nm small{display:block;margin-top:2px;font-size:12px;color:var(--helper)}
+    .drawer-v2 .foot{display:grid;gap:10px;padding:16px 20px;background:var(--layer)}
+    .drawer-v2 .foot .btn-v2{height:48px;width:100%;justify-content:flex-start;margin-left:0}
+
+    /* ===== 數量調整器 ===== */
+    .stepper-v2{display:flex;align-items:center;background:var(--field)}
+    .stepper-v2 button{width:36px;height:36px;border:0;background:none;color:var(--navy);cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .stepper-v2 button:hover{background:var(--layer-hover)}
+    .stepper-v2 span{min-width:32px;text-align:center;font-weight:600}
+
+    /* ===== 提示訊息與空狀態 ===== */
+    .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;max-width:90vw;padding:12px 16px;font-size:12px;font-weight:700;color:#fff;display:none;box-shadow:0 10px 24px rgba(0,0,0,.2)}
+    .toast.show{display:block}
+    .toast.ok{background:var(--toast-ok)}
+    .toast.err{background:var(--toast-err)}
+    .toast.info{background:var(--toast-info)}
+    .empty{padding:64px 16px;text-align:center}
+    .empty .ico{width:56px;height:56px;margin:0 auto;background:var(--bg);color:var(--helper);display:flex;align-items:center;justify-content:center}
+    .empty h3{font-size:14px;font-weight:900;margin-top:16px}
+    .empty p{font-size:12px;color:var(--helper);margin-top:4px}
+  
+    /* =========================================================
+       以下為本系統追加樣式（只用 :root 變數，不新增散落色碼）
+       ========================================================= */
+
+    /* 狀態標籤補一種：處理中類「進行中但不需警示」用淡藍 */
+    .tag-v2.info{background:var(--navy-soft);color:var(--navy)}
+
+    /* 金額、數量、日期：等寬數字，金額靠右 */
+    .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+    .table-v2 th.r,.table-v2 td.r{text-align:right}
+    .table-v2 td .sub.alert{color:var(--out)}
+    .table-v2 td .note{display:block;max-width:160px;font-size:12px;color:var(--muted);white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+    .table-v2 td .content-sub{max-width:260px;white-space:pre-line}
+    /* 清單表格儲存格左右內距縮成 12px，1366px 螢幕不必橫向捲動 */
+    .table-v2.compact th,.table-v2.compact td{padding-left:12px;padding-right:12px}
+
+    /* 工具列第二列：篩選條件 */
+    .filters-v2{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:0 16px 12px}
+    .filters-v2 .field-v2{min-width:120px}
+    .filters-v2 input[type=date].field-v2{min-width:150px}
+    .filters-v2 .lbl{font-size:12px;letter-spacing:.32px;color:var(--muted);white-space:nowrap}
+    .filters-v2 .range{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+    /* 手機：篩選欄位平均分配寬度，日期區間獨立一列 */
+    @media (max-width:639px){
+      .filters-v2 .field-v2{flex:1 1 140px;min-width:0}
+      .filters-v2 .range{flex:1 1 100%}
+      .filters-v2 input[type=date].field-v2{min-width:0;flex:1 1 120px}
+      .toolbar-v2 .field-v2[type=search]{flex:1 1 100%;min-width:0}
+    }
+    .flag-chip{display:inline-flex;align-items:center;gap:4px;height:32px;padding:0 4px 0 12px;background:var(--navy-soft);color:var(--navy);font-size:12px}
+    .flag-chip button{width:28px;height:28px;border:0;background:transparent;color:var(--navy);cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .flag-chip button:hover{background:var(--layer-hover)}
+
+    /* 表格底部：已顯示 N / M ＋ 顯示更多 */
+    .more-bar{display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:12px;color:var(--helper)}
+
+    /* 讀取中轉圈（唯一允許的圓形之一） */
+    .loading{padding:64px 16px;text-align:center;color:var(--helper);font-size:12px}
+    .spinner{width:36px;height:36px;margin:0 auto 12px;border:3px solid var(--layer-active);border-top-color:var(--navy);animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* 抽屜內的提醒條（沿用 .attn 色彩） */
+    .drawer-v2 .attn{margin-top:8px;font-size:12px}
+    .drawer-v2 .meta{font-size:12px;color:var(--helper);line-height:1.7}
+    .drawer-v2 .stepper-v2 input[type=number]{width:72px;height:36px;padding:0;text-align:center;background:transparent;border:0;font-weight:600;-moz-appearance:textfield}
+    .drawer-v2 .stepper-v2 input::-webkit-outer-spin-button,.drawer-v2 .stepper-v2 input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    .drawer-v2 .checks{display:grid;gap:12px}
+    .two-col{display:grid;grid-template-columns:1fr;gap:16px}
+    @media (min-width:480px){.two-col{grid-template-columns:1fr 1fr}}
+    .two-col .field-group{margin-top:0}
+
+    /* 密碼欄位：模板原本沒有 password 類型，已補進上方輸入框共用樣式（內距、底線、灰底）
+       密碼點點字距加大，比較好數 */
+    input[type=password]{letter-spacing:2px}
+
+    /* 登入畫面：沿用主區與面板樣式，靠左上，不做置中卡片 */
+    body.locked .shell,body.locked .topbar .right{display:none}
+    #loginView{display:none;padding:16px}
+    body.locked #loginView{display:block}
+    @media (min-width:640px){#loginView{padding:24px}}
+    .login-form{padding:4px 16px 24px;max-width:400px}
+    .login-form label{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted);margin-bottom:6px}
+    .login-form input{width:100%;height:40px}
+    .login-form .field-help{font-size:12px;letter-spacing:.32px;color:var(--helper);margin-top:4px}
+    .login-form .err{font-size:12px;color:var(--out);margin-top:8px;min-height:18px}
+    .login-form .btn-v2{height:48px;width:100%;justify-content:flex-start;margin-top:16px}
+
+    /* 沒有操作欄的表格（異動紀錄）：最後一欄恢復正常寬度與換行 */
+    .table-v2.no-op td:last-child{width:auto;white-space:normal}
+  </style>
+</head>
+<body>
+  <!-- ===== 頂欄 ===== -->
+  <header class="topbar">
+    <h1>對外廠商請購管理</h1>
+    <div class="right">
+      <span class="updated" id="lastUpdated">尚未更新</span>
+      <button class="btn-top" type="button" onclick="manualRefresh()"><span data-icon="refresh-cw"></span>重新整理</button>
+      <button class="btn-top" type="button" onclick="logout()"><span data-icon="log-out"></span>登出</button>
+    </div>
+  </header>
+
+  <!-- ===== 登入畫面：body 有 locked 時顯示，並隱藏後台 ===== -->
+  <section id="loginView">
+    <div class="panel-v2">
+      <div class="toolbar-v2"><h2>登入後台</h2></div>
+      <form class="login-form" onsubmit="event.preventDefault();doLogin()">
+        <label for="loginPwd">後台密碼 *</label>
+        <input type="password" id="loginPwd" autocomplete="current-password">
+        <p class="field-help">密碼由院辦管理。登入後 6 小時內沒有操作會自動登出。</p>
+        <p class="err" id="loginErr" role="alert"></p>
+        <button class="btn-v2 pri" type="submit" id="btnLogin">登入</button>
+      </form>
+    </div>
+  </section>
+
+  <div class="shell">
+    <!-- ===== 側欄：頁籤由 renderNav() 產生 ===== -->
+    <nav class="nav-v2" id="nav" aria-label="功能選單"></nav>
+
+    <!-- ===== 主區 ===== -->
+    <main class="main">
+      <!-- KPI 磚：renderKpis() 產生 -->
+      <section class="kpis" id="kpis"></section>
+
+      <!-- 需要處理提示條：沒有待辦時整條不顯示 -->
+      <div class="attn" id="attn" style="display:none"></div>
+
+      <!-- 面板：工具列由 renderToolbar() 產生（切頁籤時才重畫，自動更新不會清掉輸入中的篩選） -->
+      <section class="panel-v2">
+        <div id="toolbar"></div>
+        <div id="panelBody"><div class="loading"><div class="spinner rounded-circle"></div>讀取資料中…</div></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===== 新增／編輯抽屜 ===== -->
+  <div class="overlay side" id="editDrawer">
+    <div class="drawer-v2" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+      <header>
+        <div><small id="editEyebrow">NEW REQUEST</small><h3 id="editTitle">新增請購</h3></div>
+        <button class="drawer-close" type="button" aria-label="關閉" onclick="closeOverlay('editDrawer')"><span data-icon="x"></span></button>
+      </header>
+      <div class="body">
+        <!-- 背景更新時發現這筆被別人改過，提醒重新開啟 -->
+        <div class="attn" id="staleNote" style="display:none;margin:0 0 16px"></div>
+
+        <!-- 編輯時才顯示：編號與建立／修改資訊 -->
+        <div class="field-group" id="metaGroup" style="display:none">
+          <label class="field-label" for="fId">請購編號</label>
+          <input type="text" id="fId" disabled>
+          <p class="field-help">建立後不可修改，異動紀錄會用這個編號對照。</p>
+          <p class="meta" id="fMeta"></p>
+          <button class="btn-v2 ghost" type="button" style="margin-top:4px;padding:0 8px" onclick="openHistoryForEditing()"><span data-icon="history"></span>查看這筆的異動紀錄</button>
+        </div>
+
+        <div class="two-col field-group">
+          <div class="field-group">
+            <label class="field-label" for="fRequestedDate">提出日期 *</label>
+            <input type="date" id="fRequestedDate">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="fEstimatedDate">預計處理日期</label>
+            <input type="date" id="fEstimatedDate">
+            <p class="field-help">不確定就留空。</p>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <span class="field-label">類型 *</span>
+          <div class="radio-group-v2">
+            <label class="radio-v2"><input type="radio" name="fType" value="purchase"><span><b>新購</b><small>向廠商購買新設備或耗材</small></span></label>
+            <label class="radio-v2"><input type="radio" name="fType" value="repair"><span><b>維修</b><small>既有設備送修或請廠商到場處理</small></span></label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="fContent">內容 *</label>
+          <input type="text" id="fContent" maxlength="100" placeholder="例如：R255 會議室電腦">
+          <p class="field-help">一句話說明是什麼，最多 100 字。規格寫在下方「詳細資料」。</p>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="fDetails">詳細資料</label>
+          <textarea id="fDetails" rows="3" maxlength="2000" placeholder="規格、型號、廠商報價內容等"></textarea>
+        </div>
+
+        <div class="field-group">
+          <span class="field-label">數量 *</span>
+          <div class="row" style="padding-top:0">
+            <div class="nm"><small>1 到 999</small></div>
+            <div class="stepper-v2">
+              <button type="button" aria-label="減少數量" onclick="stepQty(-1)"><span data-icon="minus"></span></button>
+              <input type="number" id="fQty" min="1" max="999" step="1" inputmode="numeric" aria-label="數量">
+              <button type="button" aria-label="增加數量" onclick="stepQty(1)"><span data-icon="plus"></span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="fAmount">報價金額（新台幣）</label>
+          <input type="text" id="fAmount" inputmode="numeric" placeholder="例如：12345；尚未報價就留空">
+          <p class="field-help" id="fAmountHelp">只能輸入整數。</p>
+        </div>
+
+        <div class="field-group">
+          <span class="field-label">處理進度 *</span>
+          <div class="radio-group-v2" id="statusGroup"></div>
+        </div>
+
+        <div class="field-group checks">
+          <label class="check-v2">
+            <input type="checkbox" id="fInvoice">
+            <span class="check-box"></span>
+            <span class="check-text"><b>發票已取</b><small>已拿到廠商開立的發票</small></span>
+          </label>
+          <label class="check-v2">
+            <input type="checkbox" id="fGoods">
+            <span class="check-box"></span>
+            <span class="check-text"><b>貨品已取</b><small>新購已取貨，或維修已完成取回</small></span>
+          </label>
+          <!-- 結案但發票／貨品未取：只提醒，不擋存檔 -->
+          <div class="attn" id="closeWarn" style="display:none"></div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="fNote">附註</label>
+          <textarea id="fNote" rows="3" maxlength="2000"></textarea>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="fStaff">處理人員 *</label>
+          <select id="fStaff"></select>
+          <p class="field-help">每次儲存都要選，會寫進異動紀錄。</p>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="btn-v2 pri" type="button" id="btnSave" onclick="saveRequest()">儲存</button>
+        <button class="btn-v2 ghost" type="button" onclick="closeOverlay('editDrawer')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 刪除確認視窗（表頭紅色） ===== -->
+  <div class="overlay danger-layer" id="deleteModal">
+    <div class="drawer-v2 sm" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+      <header class="danger">
+        <div><small>DELETE REQUEST</small><h3 id="delTitle">刪除請購</h3></div>
+        <button class="drawer-close" type="button" aria-label="關閉" onclick="closeOverlay('deleteModal')"><span data-icon="x"></span></button>
+      </header>
+      <div class="body">
+        <p>確定要刪除「<b id="delName"></b>」嗎？</p>
+        <p class="field-help" style="margin-top:8px">刪除後會移到「已刪除」頁籤，隨時可以復原；異動紀錄會保留整筆資料。只是案件暫停的話，請改用「處理進度」。</p>
+        <div class="field-group" style="margin-top:16px">
+          <label class="field-label" for="delStaff">處理人員 *</label>
+          <select id="delStaff"></select>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="btn-v2 danger" type="button" id="btnDelete" onclick="confirmDelete()">刪除</button>
+        <button class="btn-v2 ghost" type="button" onclick="closeOverlay('deleteModal')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 復原確認視窗 ===== -->
+  <div class="overlay danger-layer" id="restoreModal">
+    <div class="drawer-v2 sm" role="dialog" aria-modal="true" aria-labelledby="resTitle">
+      <header>
+        <div><small>RESTORE REQUEST</small><h3 id="resTitle">復原請購</h3></div>
+        <button class="drawer-close" type="button" aria-label="關閉" onclick="closeOverlay('restoreModal')"><span data-icon="x"></span></button>
+      </header>
+      <div class="body">
+        <p>確定要復原「<b id="resName"></b>」嗎？</p>
+        <p class="field-help" style="margin-top:8px">復原後會回到請購清單，處理進度維持刪除前的狀態。</p>
+        <div class="field-group" style="margin-top:16px">
+          <label class="field-label" for="resStaff">處理人員 *</label>
+          <select id="resStaff"></select>
+        </div>
+      </div>
+      <div class="foot">
+        <button class="btn-v2 pri" type="button" id="btnRestore" onclick="confirmRestore()">確認復原</button>
+        <button class="btn-v2 ghost" type="button" onclick="closeOverlay('restoreModal')">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 提示訊息 ===== -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    /* =========================================================
+       對外廠商請購管理（後台）前端程式
+       資料流程：apiGetDashboard() 取回全部資料 → 存在 state →
+       篩選、排序、計數都在前端做（資料量小，切換篩選不必等伺服器）。
+       ========================================================= */
+
+    /* ===== Lucide 圖示（https://lucide.dev，ISC 授權，v0.469.0）=====
+       SVG 內嵌，不需要外部 CDN。新增圖示：到 lucide.dev 複製 SVG 內部的 path，加進這個物件。 */
+    const LUCIDE={
+      'air-vent':'<path d="M6 12H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 8h12" /><path d="M18.3 17.7a2.5 2.5 0 0 1-3.16 3.83 2.53 2.53 0 0 1-1.14-2V12" /><path d="M6.6 15.6A2 2 0 1 0 10 17v-5" />',
+      'arrow-right-left':'<path d="m16 3 4 4-4 4" /><path d="M20 7H4" /><path d="m8 21-4-4 4-4" /><path d="M4 17h16" />',
+      'building-2':'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /><path d="M10 18h4" />',
+      'calendar':'<path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" />',
+      'inbox':'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />',
+      'key-round':'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />',
+      'minus':'<path d="M5 12h14" />',
+      'package':'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /><path d="M12 22V12" /><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7" /><path d="m7.5 4.27 9 5.15" />',
+      'plus':'<path d="M5 12h14" /><path d="M12 5v14" />',
+      'refresh-cw':'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />',
+      'triangle-alert':'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" />',
+      'x':'<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
+      'wrench':'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />',
+      'trash-2':'<path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />',
+      'rotate-ccw':'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" />',
+      'log-out':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" />',
+      'history':'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" />'
+    };
+
+    /* 產生圖示 SVG 字串；cls 可加 'licon-sm'、'licon-lg'、'licon-xl' */
+    function licon(name,cls){
+      const body=LUCIDE[name];
+      if(!body)return '';
+      return '<svg class="licon'+(cls?' '+cls:'')+'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+body+'</svg>';
+    }
+
+    /* 把靜態 HTML 中的 <span data-icon="名稱"> 換成 SVG 圖示 */
+    function hydrateIcons(root=document){
+      root.querySelectorAll('[data-icon]').forEach(el=>{el.outerHTML=licon(el.dataset.icon);});
+    }
+
+    /* =========================================================
+       一、常數（與 code.gs 對應，改這裡也要改後端）
+       ========================================================= */
+    const TYPES={purchase:'新購',repair:'維修'};
+    const TYPE_ICON={purchase:'package',repair:'wrench'};
+    const STATUSES=[
+      {id:'pending',      label:'待處理', tag:'warn', help:'已提出，尚未聯絡廠商'},
+      {id:'processing',   label:'處理中', tag:'mute', help:'已詢價、已下單或已送修'},
+      {id:'reimbursement',label:'核銷中', tag:'info', help:'貨品或維修完成，正在跑發票核銷'},
+      {id:'closed',       label:'已結案', tag:'ok',   help:'核銷完成'}
+    ];
+    const STATUS_MAP=Object.fromEntries(STATUSES.map(s=>[s.id,s]));
+    const PAGE_SIZE=100;               // 表格一次畫 100 筆
+    const AUTO_REFRESH_MS=15000;       // 每 15 秒背景更新
+    const FLAGS={
+      overdue:'已過預計處理日期仍未結案',
+      mismatch:'已結案但發票或貨品未取'
+    };
+
+    /* =========================================================
+       二、狀態
+       ========================================================= */
+    const state={
+      loaded:false,
+      records:[],          // 全部請購（含已刪除）
+      staff:[],            // 啟用中的處理人員
+      today:'',            // 伺服器（台北）今天，YYYY-MM-DD
+      tab:'list',
+      filters:{q:'',type:'',status:'',invoice:'',start:'',end:'',sort:'desc',flag:''},
+      shown:PAGE_SIZE,
+      trashQ:'',trashShown:PAGE_SIZE,
+      history:null,        // null = 尚未讀取
+      historyError:'',     // 讀取失敗的原因（顯示在畫面上，附「重試」）
+      historyLoading:false,
+      historyQ:'',historyAction:'',historyId:'',historyShown:PAGE_SIZE,
+      editing:null,        // 正在編輯的那筆（新增時為 null）
+      deleting:null,
+      restoring:null,
+      busy:false,          // 送出中，暫停背景更新
+      token:''             // 登入通行證
+    };
+
+    /* =========================================================
+       三、與後端溝通
+       ========================================================= */
+
+    /* 把 google.script.run 包成 Promise；網路或權限錯誤也轉成 {ok:false}
+       60 秒沒有回應視為逾時，避免畫面一直轉圈 */
+    const API_TIMEOUT_MS=60000;
+    const TOKEN_KEY='vendorRequestsToken';
+
+    /* 通行證存在 sessionStorage：關掉分頁就失效。
+       嵌在 iframe 時部分瀏覽器會擋儲存空間，就退回只存在記憶體（重新整理頁面需重登） */
+    function loadToken(){try{return sessionStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}}
+    function saveToken(t){state.token=t;try{t?sessionStorage.setItem(TOKEN_KEY,t):sessionStorage.removeItem(TOKEN_KEY);}catch(e){}}
+
+    /* 後台 API：自動帶上通行證；伺服器說通行證失效就切回登入畫面 */
+    async function api(fn,arg){
+      const payload=arg===undefined?state.token:Object.assign({},arg,{token:state.token});
+      const res=await rawApi(fn,payload);
+      if(res&&res.authRequired)showLogin(res.error);
+      return res;
+    }
+
+    /* 直接呼叫 google.script.run（登入用，不帶通行證） */
+    function rawApi(fn,arg){
+      return new Promise(resolve=>{
+        const timer=setTimeout(()=>resolve({ok:false,error:'伺服器回應逾時，請按「重新整理」再試一次。'}),API_TIMEOUT_MS);
+        const done=res=>{clearTimeout(timer);resolve(res);};
+        const runner=google.script.run
+          .withSuccessHandler(res=>done(res||{ok:false,error:'伺服器沒有回傳資料，請重新整理。'}))
+          .withFailureHandler(err=>done({ok:false,error:'連線失敗：'+(err&&err.message?err.message:err)+'。請檢查網路後重新整理。'}));
+        arg===undefined?runner[fn]():runner[fn](arg);
+      });
+    }
+
+    /* 讀取主要資料。silent=true 為背景更新：失敗不跳錯誤訊息，避免干擾 */
+    async function loadData(silent){
+      const res=await api('apiGetDashboard');
+      if(!res.ok){
+        if(!silent)showToast(res.error,'err');
+        if(!state.loaded)document.getElementById('panelBody').innerHTML=emptyHtml('資料讀取失敗',res.error);
+        return false;
+      }
+      state.records=res.records||[];
+      state.staff=res.staff||[];
+      state.today=res.today;
+      state.loaded=true;
+      document.getElementById('lastUpdated').textContent='最後更新 '+res.serverTime.slice(11);
+      renderAll();
+      checkEditingStale();
+      return true;
+    }
+
+    /* 讀取異動紀錄：失敗時把原因留在畫面上（附重試），不只閃一下錯誤訊息 */
+    async function loadHistory(){
+      if(state.historyLoading)return;   // 避免重複送出
+      state.historyLoading=true;state.historyError='';
+      if(state.tab==='history')renderBody();
+      const res=await api('apiGetHistory');
+      state.historyLoading=false;
+      if(!res.ok){
+        state.historyError=res.error;
+        showToast(res.error,'err');
+      }else{
+        state.history=res.history||[];
+      }
+      if(state.tab==='history')renderBody();
+    }
+
+    /* 頂欄「重新整理」 */
+    async function manualRefresh(){
+      const ok=await loadData(false);
+      if(state.tab==='history')await loadHistory();
+      if(ok)showToast('資料已更新。','info');
+    }
+
+    /* 背景每 15 秒更新：分頁在背景或送出中就跳過；只重畫資料，不動工具列與抽屜 */
+    setInterval(()=>{
+      if(document.hidden||state.busy||!state.token)return;
+      loadData(true);
+    },AUTO_REFRESH_MS);
+
+    /* ===== 登入與登出 ===== */
+    function showLogin(msg){
+      saveToken('');
+      document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open'));
+      state.editing=null;
+      document.body.classList.add('locked');
+      document.getElementById('loginErr').textContent=msg||'';
+      const pwd=document.getElementById('loginPwd');pwd.value='';pwd.focus();
+    }
+
+    async function doLogin(){
+      const pwd=document.getElementById('loginPwd').value;
+      const err=document.getElementById('loginErr');
+      if(!pwd){err.textContent='請輸入密碼。';return;}
+      const btn=document.getElementById('btnLogin');
+      btn.disabled=true;btn.textContent='處理中…';err.textContent='';
+      const res=await rawApi('apiLogin',pwd);
+      btn.disabled=false;btn.textContent='登入';
+      if(!res.ok){err.textContent=res.error;document.getElementById('loginPwd').select();return;}
+      saveToken(res.token);
+      document.getElementById('loginPwd').value='';
+      document.body.classList.remove('locked');
+      state.history=null;
+      await loadData(false);
+    }
+
+    async function logout(){
+      const t=state.token;
+      showLogin('已登出。');
+      if(t)rawApi('apiLogout',t);   // 伺服器端作廢通行證，不必等回應
+    }
+
+    /* =========================================================
+       四、資料計算
+       ========================================================= */
+    const active=()=>state.records.filter(r=>!r.deletedAt);
+    const deleted=()=>state.records.filter(r=>r.deletedAt);
+
+    /* 已過預計處理日期但未結案 */
+    function isOverdue(r){return r.status!=='closed'&&r.estimatedDate&&state.today&&r.estimatedDate<state.today;}
+    /* 已結案但發票或貨品未取 */
+    function isMismatch(r){return r.status==='closed'&&(!r.invoiceReceived||!r.goodsReceived);}
+
+    /* 依目前篩選條件取得清單 */
+    function filteredList(){
+      const f=state.filters;
+      let start=f.start,end=f.end;
+      if(start&&end&&start>end){const t=start;start=end;end=t;}  // 起訖顛倒自動對調
+      const q=f.q.trim().toLowerCase();
+      const list=active().filter(r=>{
+        if(f.type&&r.requestType!==f.type)return false;
+        if(f.status&&r.status!==f.status)return false;
+        if(f.invoice==='received'&&!r.invoiceReceived)return false;
+        if(f.invoice==='missing'&&r.invoiceReceived)return false;
+        if(start&&r.requestedDate<start)return false;
+        if(end&&r.requestedDate>end)return false;
+        if(f.flag==='overdue'&&!isOverdue(r))return false;
+        if(f.flag==='mismatch'&&!isMismatch(r))return false;
+        if(q&&!(r.content+'\n'+r.details+'\n'+r.note).toLowerCase().includes(q))return false;
+        return true;
+      });
+      // 依提出日期排序；同一天再依建立時間
+      const dir=f.sort==='asc'?1:-1;
+      list.sort((a,b)=>(a.requestedDate===b.requestedDate?(a.createdAt<b.createdAt?-1:a.createdAt>b.createdAt?1:0):(a.requestedDate<b.requestedDate?-1:1))*dir);
+      return list;
+    }
+
+    /* =========================================================
+       五、畫面
+       ========================================================= */
+    function renderAll(){renderNav();renderKpis();renderAttn();renderBody();}
+
+    /* 側欄：只有「請購清單」顯示待處理數量徽章 */
+    function renderNav(){
+      const pending=active().filter(r=>r.status==='pending').length;
+      const tabs=[
+        {id:'list',label:'請購清單',count:pending},
+        {id:'trash',label:'已刪除',count:0},
+        {id:'history',label:'異動紀錄',count:0}
+      ];
+      document.getElementById('nav').innerHTML=tabs.map(t=>
+        `<button type="button" class="nav-btn${t.id===state.tab?' on':''}" onclick="switchTab('${t.id}')">
+          <span>${t.label}</span>${t.count>0?`<span class="count">${t.count}</span>`:''}
+        </button>`).join('');
+    }
+
+    function switchTab(id){
+      state.tab=id;
+      renderNav();renderToolbar();renderBody();
+      if(id==='history'&&state.history===null)loadHistory();
+    }
+
+    /* KPI：待處理有數字時用琥珀橘提醒；報價合計只算未刪除的資料，可直接對帳 */
+    function renderKpis(){
+      const list=active();
+      const c=s=>list.filter(r=>r.status===s).length;
+      const sum=list.reduce((t,r)=>t+(r.quotedAmount===''?0:Number(r.quotedAmount)),0);
+      const pending=c('pending');
+      document.getElementById('kpis').innerHTML=`
+        <div class="kpi${pending>0?' alert':''}"><small>待處理</small><b>${pending}</b></div>
+        <div class="kpi"><small>處理中</small><b>${c('processing')}</b></div>
+        <div class="kpi"><small>核銷中</small><b>${c('reimbursement')}</b></div>
+        <div class="kpi"><small>已結案</small><b>${c('closed')}</b></div>
+        <div class="kpi"><small>報價合計（${list.length} 筆）</small><b>${money(sum)}</b></div>`;
+    }
+
+    /* 需要處理提示條：每個事項一句話＋一個連結 */
+    function renderAttn(){
+      const list=active();
+      const items=[];
+      const pending=list.filter(r=>r.status==='pending').length;
+      const overdue=list.filter(isOverdue).length;
+      const mismatch=list.filter(isMismatch).length;
+      if(pending)items.push(`<span><strong>待處理 ${pending} 筆</strong>　<a role="button" tabindex="0" onclick="jumpTo({status:'pending'})">前往處理</a></span>`);
+      if(overdue)items.push(`<span><strong>已過預計處理日期 ${overdue} 筆</strong>　<a role="button" tabindex="0" onclick="jumpTo({flag:'overdue'})">查看</a></span>`);
+      if(mismatch)items.push(`<span><strong>已結案但發票或貨品未取 ${mismatch} 筆</strong>　<a role="button" tabindex="0" onclick="jumpTo({flag:'mismatch'})">查看</a></span>`);
+      const el=document.getElementById('attn');
+      el.innerHTML=items.join('');
+      el.style.display=items.length?'flex':'none';
+    }
+
+    /* 從提示條跳到清單並套用篩選（其他篩選清空，避免看不到） */
+    function jumpTo(f){
+      state.filters=Object.assign({q:'',type:'',status:'',invoice:'',start:'',end:'',sort:state.filters.sort,flag:''},f);
+      state.shown=PAGE_SIZE;
+      state.tab='list';
+      renderNav();renderToolbar();renderBody();
+    }
+
+    /* 工具列：切頁籤時才重畫，背景更新不會清掉輸入中的文字 */
+    function renderToolbar(){
+      const el=document.getElementById('toolbar');
+      if(state.tab==='list'){
+        const f=state.filters;
+        const opt=(v,l,cur)=>`<option value="${v}"${v===cur?' selected':''}>${l}</option>`;
+        el.innerHTML=`
+          <div class="toolbar-v2">
+            <h2>請購清單</h2>
+            <span class="sp"></span>
+            <input class="field-v2" type="search" id="fltQ" placeholder="搜尋內容、詳細資料、附註" value="${esc(f.q)}" oninput="setFilter('q',this.value)">
+            <button class="btn-v2 pri" type="button" onclick="openCreate()">${licon('plus')}新增請購</button>
+          </div>
+          <div class="filters-v2">
+            <select class="field-v2" aria-label="類型" onchange="setFilter('type',this.value)">
+              ${opt('','全部類型',f.type)}${opt('purchase','新購',f.type)}${opt('repair','維修',f.type)}
+            </select>
+            <select class="field-v2" aria-label="處理進度" onchange="setFilter('status',this.value)">
+              ${opt('','全部進度',f.status)}${STATUSES.map(s=>opt(s.id,s.label,f.status)).join('')}
+            </select>
+            <select class="field-v2" aria-label="發票" onchange="setFilter('invoice',this.value)">
+              ${opt('','發票：全部',f.invoice)}${opt('received','發票已取',f.invoice)}${opt('missing','發票未取',f.invoice)}
+            </select>
+            <span class="range">
+              <span class="lbl">提出日期</span>
+              <input class="field-v2" type="date" aria-label="提出日期起" value="${esc(f.start)}" onchange="setFilter('start',this.value)">
+              <span class="lbl">至</span>
+              <input class="field-v2" type="date" aria-label="提出日期迄" value="${esc(f.end)}" onchange="setFilter('end',this.value)">
+            </span>
+            <select class="field-v2" aria-label="排序" onchange="setFilter('sort',this.value)">
+              ${opt('desc','提出日期：新到舊',f.sort)}${opt('asc','提出日期：舊到新',f.sort)}
+            </select>
+            ${f.flag?`<span class="flag-chip">${esc(FLAGS[f.flag])}<button type="button" aria-label="取消這個篩選" onclick="setFilter('flag','')">${licon('x','licon-sm')}</button></span>`:''}
+            <button class="btn-v2 ghost" type="button" onclick="clearFilters()">清除篩選</button>
+          </div>`;
+      }else if(state.tab==='trash'){
+        el.innerHTML=`
+          <div class="toolbar-v2">
+            <h2>已刪除</h2>
+            <span class="sp"></span>
+            <input class="field-v2" type="search" placeholder="搜尋內容" value="${esc(state.trashQ)}" oninput="state.trashQ=this.value;state.trashShown=PAGE_SIZE;renderBody()">
+          </div>`;
+      }else{
+        const acts=['','新增','編輯','刪除','復原','匯入','舊系統同步'];
+        el.innerHTML=`
+          <div class="toolbar-v2">
+            <h2>異動紀錄</h2>
+            <span class="sp"></span>
+            ${state.historyId?`<span class="flag-chip">只看單筆：${esc(historyName(state.historyId))}<button type="button" aria-label="取消單筆篩選" onclick="state.historyId='';state.historyShown=PAGE_SIZE;renderToolbar();renderBody()">${licon('x','licon-sm')}</button></span>`:''}
+            <input class="field-v2" type="search" placeholder="搜尋內容、人員、變更摘要" value="${esc(state.historyQ)}" oninput="state.historyQ=this.value;state.historyShown=PAGE_SIZE;renderBody()">
+            <select class="field-v2" style="min-width:110px" aria-label="動作" onchange="state.historyAction=this.value;state.historyShown=PAGE_SIZE;renderBody()">
+              ${acts.map(a=>`<option value="${a}"${a===state.historyAction?' selected':''}>${a||'全部動作'}</option>`).join('')}
+            </select>
+          </div>`;
+      }
+    }
+
+    function setFilter(key,val){
+      state.filters[key]=val;
+      state.shown=PAGE_SIZE;
+      if(key==='flag')renderToolbar();   // 篩選標籤要消失
+      renderBody();
+    }
+    function clearFilters(){
+      state.filters={q:'',type:'',status:'',invoice:'',start:'',end:'',sort:'desc',flag:''};
+      state.shown=PAGE_SIZE;
+      renderToolbar();renderBody();
+    }
+
+    function renderBody(){
+      const el=document.getElementById('panelBody');
+      if(!state.loaded){el.innerHTML=loadingHtml();return;}
+      if(state.tab==='list')el.innerHTML=listHtml();
+      else if(state.tab==='trash')el.innerHTML=trashHtml();
+      else el.innerHTML=historyHtml();
+    }
+
+    /* ----- 請購清單表格 ----- */
+    function listHtml(){
+      const list=filteredList();
+      if(!list.length){
+        return active().length
+          ?emptyHtml('找不到符合的請購','請調整搜尋文字或篩選條件。')
+          :emptyHtml('目前沒有請購資料','按「新增請購」建立第一筆。');
+      }
+      const rows=list.slice(0,state.shown).map(r=>{
+        const st=STATUS_MAP[r.status]||{label:r.status||'--',tag:'mute'};
+        const closed=r.status==='closed';
+        // 發票／貨品：已取綠色；未取一般灰；結案卻未取改紅色提醒
+        const recv=v=>v?'<span class="tag-v2 ok">已取</span>':`<span class="tag-v2 ${closed?'out':'mute'}">未取</span>`;
+        return `<tr>
+          <td class="num">${esc(r.requestedDate)}</td>
+          <td><b>${esc(r.content)}</b>${r.details?`<span class="sub content-sub">${esc(r.details)}</span>`:''}</td>
+          <td><span class="chip-v2 ${r.requestType==='purchase'?'key':'eq'}">${licon(TYPE_ICON[r.requestType]||'package')} ${esc(TYPES[r.requestType]||r.requestType)}</span></td>
+          <td class="num r">${r.quantity}</td>
+          <td><span class="tag-v2 ${st.tag}">${esc(st.label)}</span></td>
+          <td class="num r">${money(r.quotedAmount)}</td>
+          <td class="num">${r.estimatedDate?esc(r.estimatedDate):'--'}${isOverdue(r)?'<span class="sub alert">已過預計日</span>':''}</td>
+          <td>${recv(r.invoiceReceived)}</td>
+          <td>${recv(r.goodsReceived)}</td>
+          <td>${r.note?`<span class="note" title="${esc(r.note)}">${esc(r.note)}</span>`:'--'}</td>
+          <td><button class="btn-v2 ghost" type="button" onclick="openEdit('${r.id}')">編輯</button><button class="btn-v2 danger-ghost" type="button" onclick="openDelete('${r.id}')">刪除</button></td>
+        </tr>`;
+      }).join('');
+      return `<div class="table-wrap"><table class="table-v2 compact" style="min-width:1040px">
+        <thead><tr><th>提出日期</th><th>內容／詳細資料</th><th>類型</th><th class="r">數量</th><th>處理進度</th><th class="r">報價</th><th>預計處理日期</th><th>發票</th><th>取貨</th><th>附註</th><th>操作</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>${moreBar(Math.min(state.shown,list.length),list.length,'state.shown+=PAGE_SIZE;renderBody()')}`;
+    }
+
+    /* ----- 已刪除表格 ----- */
+    function trashHtml(){
+      const q=state.trashQ.trim().toLowerCase();
+      const list=deleted()
+        .filter(r=>!q||(r.content+'\n'+r.details+'\n'+r.note).toLowerCase().includes(q))
+        .sort((a,b)=>a.deletedAt<b.deletedAt?1:-1);
+      if(!list.length)return deleted().length?emptyHtml('找不到符合的請購','請調整搜尋文字。'):emptyHtml('沒有已刪除的請購','刪除的請購會出現在這裡，可以復原。');
+      const rows=list.slice(0,state.trashShown).map(r=>{
+        const st=STATUS_MAP[r.status]||{label:r.status||'--',tag:'mute'};
+        return `<tr class="row-disabled">
+          <td class="num">${esc(r.deletedAt)}<span class="sub">${esc(r.deletedBy)}</span></td>
+          <td><b>${esc(r.content)}</b><span class="sub">提出日期 ${esc(r.requestedDate)}</span></td>
+          <td>${esc(TYPES[r.requestType]||r.requestType)}</td>
+          <td class="num r">${money(r.quotedAmount)}</td>
+          <td><span class="tag-v2 ${st.tag}">${esc(st.label)}</span></td>
+          <td><button class="btn-v2 ghost" type="button" onclick="openRestore('${r.id}')">${licon('rotate-ccw')}復原</button></td>
+        </tr>`;
+      }).join('');
+      return `<div class="table-wrap"><table class="table-v2">
+        <thead><tr><th>刪除時間／人員</th><th>內容</th><th>類型</th><th class="r">報價</th><th>刪除前進度</th><th>操作</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>${moreBar(Math.min(state.trashShown,list.length),list.length,'state.trashShown+=PAGE_SIZE;renderBody()')}`;
+    }
+
+    /* ----- 異動紀錄表格 ----- */
+    const ACTION_TAG={'新增':'ok','編輯':'info','刪除':'out','復原':'warn','匯入':'mute','舊系統同步':'mute'};
+    function historyHtml(){
+      if(state.history===null){
+        if(state.historyError)return `<div class="empty"><div class="ico">${licon('triangle-alert','licon-lg')}</div><h3>異動紀錄讀取失敗</h3><p>${esc(state.historyError)}</p><p style="margin-top:12px"><button class="btn-v2 pri" type="button" onclick="loadHistory()">${licon('refresh-cw')}重試</button></p></div>`;
+        if(!state.historyLoading)loadHistory();   // 新增、編輯後清空的紀錄，回到這頁時自動重讀
+        return loadingHtml();
+      }
+      const q=state.historyQ.trim().toLowerCase();
+      const list=state.history.filter(h=>{
+        if(state.historyId&&h.requestId!==state.historyId)return false;
+        if(state.historyAction&&h.action!==state.historyAction)return false;
+        if(q&&!(h.content+'\n'+h.staff+'\n'+h.summary).toLowerCase().includes(q))return false;
+        return true;
+      });
+      if(!list.length)return emptyHtml('沒有符合的異動紀錄','請調整搜尋文字或篩選條件。');
+      const rows=list.slice(0,state.historyShown).map(h=>`<tr>
+          <td class="num">${esc(h.time)}</td>
+          <td>${esc(h.staff)}</td>
+          <td><span class="tag-v2 ${ACTION_TAG[h.action]||'mute'}">${esc(h.action)}</span></td>
+          <td><b>${esc(h.content)}</b></td>
+          <td style="white-space:normal;min-width:280px">${esc(h.summary).replace(/；/g,'；<br>')}</td>
+        </tr>`).join('');
+      // 這張表沒有操作欄，加 no-op 取消最後一欄「寬 1%、不換行」的預設
+      return `<div class="table-wrap"><table class="table-v2 no-op">
+        <thead><tr><th>時間</th><th>處理人員</th><th>動作</th><th>內容</th><th>變更摘要</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+        ${moreBar(Math.min(state.historyShown,list.length),list.length,'state.historyShown+=PAGE_SIZE;renderBody()')}`;
+    }
+    function historyName(id){
+      const r=state.records.find(x=>x.id===id);
+      return r?r.content:id.slice(0,8);
+    }
+
+    /* 表格底部：已顯示 N / M，還有沒顯示的才出現「顯示更多」 */
+    function moreBar(shown,total,onMore){
+      return `<div class="more-bar">已顯示 ${shown} / ${total}${shown<total?`<button class="btn-v2 ghost" type="button" onclick="${onMore}">顯示更多</button>`:''}</div>`;
+    }
+    function emptyHtml(title,hint){
+      return `<div class="empty"><div class="ico">${licon('inbox','licon-lg')}</div><h3>${esc(title)}</h3><p>${esc(hint)}</p></div>`;
+    }
+    function loadingHtml(){return '<div class="loading"><div class="spinner rounded-circle"></div>讀取資料中…</div>';}
+
+    /* =========================================================
+       六、新增／編輯抽屜
+       ========================================================= */
+
+    /* 處理人員下拉：每次開啟都重選，不帶入上一位 */
+    function fillStaff(selectId){
+      const el=document.getElementById(selectId);
+      el.innerHTML=state.staff.length
+        ?'<option value="">請選擇</option>'+state.staff.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
+        :'<option value="">請先到試算表「處理人員」新增名單</option>';
+      el.value='';
+    }
+
+    /* 處理進度單選列表 */
+    function renderStatusGroup(){
+      document.getElementById('statusGroup').innerHTML=STATUSES.map(s=>
+        `<label class="radio-v2"><input type="radio" name="fStatus" value="${s.id}" onchange="updateCloseWarn()"><span><b>${s.label}</b><small>${s.help}</small></span></label>`).join('');
+    }
+
+    function openCreate(){
+      state.editing=null;
+      fillForm({
+        requestedDate:state.today,requestType:'purchase',content:'',details:'',quantity:1,
+        quotedAmount:'',estimatedDate:'',status:'pending',invoiceReceived:false,goodsReceived:false,note:''
+      });
+      document.getElementById('editEyebrow').textContent='NEW REQUEST';
+      document.getElementById('editTitle').textContent='新增請購';
+      document.getElementById('metaGroup').style.display='none';
+      openOverlay('editDrawer');
+      document.getElementById('fContent').focus();
+    }
+
+    function openEdit(id){
+      const r=state.records.find(x=>x.id===id);
+      if(!r){showToast('找不到這筆請購，請重新整理。','err');return;}
+      state.editing=JSON.parse(JSON.stringify(r));   // 存一份開啟當下的版本，比對是否被別人改過
+      fillForm(r);
+      document.getElementById('editEyebrow').textContent='EDIT REQUEST';
+      document.getElementById('editTitle').textContent='編輯請購';
+      document.getElementById('metaGroup').style.display='';
+      document.getElementById('fId').value=r.id;
+      document.getElementById('fMeta').innerHTML=
+        `建立：${esc(r.createdBy||'--')}　${esc(r.createdAt||'--')}<br>最後修改：${esc(r.updatedBy||'--')}　${esc(r.updatedAt||'--')}`;
+      openOverlay('editDrawer');
+    }
+
+    /* 依資料重新帶入所有欄位，不殘留上次未儲存的內容 */
+    function fillForm(r){
+      document.getElementById('fRequestedDate').value=r.requestedDate||'';
+      document.getElementById('fEstimatedDate').value=r.estimatedDate||'';
+      document.querySelectorAll('input[name=fType]').forEach(el=>{el.checked=el.value===r.requestType;});
+      document.getElementById('fContent').value=r.content||'';
+      document.getElementById('fDetails').value=r.details||'';
+      document.getElementById('fQty').value=r.quantity||1;
+      document.getElementById('fAmount').value=r.quotedAmount===''||r.quotedAmount==null?'':String(r.quotedAmount);
+      document.querySelectorAll('input[name=fStatus]').forEach(el=>{el.checked=el.value===r.status;});
+      document.getElementById('fInvoice').checked=!!r.invoiceReceived;
+      document.getElementById('fGoods').checked=!!r.goodsReceived;
+      document.getElementById('fNote').value=r.note||'';
+      document.getElementById('staleNote').style.display='none';
+      fillStaff('fStaff');
+      updateAmountHelp();
+      updateCloseWarn();
+      const btn=document.getElementById('btnSave');btn.disabled=false;btn.textContent='儲存';
+    }
+
+    /* 數量調整器：限制 1～999 */
+    function stepQty(d){
+      const el=document.getElementById('fQty');
+      el.value=clampQty((parseInt(el.value,10)||1)+d);
+    }
+    function clampQty(n){return Math.max(1,Math.min(999,n));}
+
+    /* 報價金額：輸入時只留數字，下方即時顯示千分位 */
+    function updateAmountHelp(){
+      const v=document.getElementById('fAmount').value;
+      document.getElementById('fAmountHelp').textContent=v?'目前：'+money(Number(v))+'。只能輸入整數。':'只能輸入整數。';
+    }
+
+    /* 結案但發票或貨品未取：提醒，不擋存檔 */
+    function updateCloseWarn(){
+      const st=(document.querySelector('input[name=fStatus]:checked')||{}).value;
+      const inv=document.getElementById('fInvoice').checked,goods=document.getElementById('fGoods').checked;
+      const miss=[!inv?'發票':'',!goods?'貨品':''].filter(Boolean);
+      const el=document.getElementById('closeWarn');
+      if(st==='closed'&&miss.length){
+        el.innerHTML=`<span>${licon('triangle-alert','licon-sm')} 處理進度為「已結案」，但${miss.join('、')}尚未勾選已取。仍可儲存，請確認是否真的結案。</span>`;
+        el.style.display='flex';
+      }else el.style.display='none';
+    }
+
+    /* 背景更新後檢查：正在編輯的那筆是否被別人改過或刪除 */
+    function checkEditingStale(){
+      if(!state.editing||!document.getElementById('editDrawer').classList.contains('open'))return;
+      const cur=state.records.find(x=>x.id===state.editing.id);
+      const el=document.getElementById('staleNote');
+      if(!cur||cur.deletedAt){
+        el.innerHTML='<span><strong>這筆請購已被刪除。</strong>　請關閉抽屜。</span>';el.style.display='flex';
+      }else if(cur.version!==state.editing.version){
+        el.innerHTML=`<span><strong>這筆剛被 ${esc(cur.updatedBy)} 修改（${esc(cur.updatedAt)}）。</strong>　直接儲存會被擋下，請<a role="button" tabindex="0" onclick="openEdit('${cur.id}')">重新載入這筆</a>。</span>`;
+        el.style.display='flex';
+      }
+    }
+
+    /* 收集表單 */
+    function collectForm(){
+      return {
+        requestedDate:document.getElementById('fRequestedDate').value,
+        estimatedDate:document.getElementById('fEstimatedDate').value,
+        requestType:(document.querySelector('input[name=fType]:checked')||{}).value||'',
+        content:document.getElementById('fContent').value.trim(),
+        details:document.getElementById('fDetails').value.trim(),
+        quantity:parseInt(document.getElementById('fQty').value,10),
+        quotedAmount:document.getElementById('fAmount').value.trim(),
+        status:(document.querySelector('input[name=fStatus]:checked')||{}).value||'',
+        invoiceReceived:document.getElementById('fInvoice').checked,
+        goodsReceived:document.getElementById('fGoods').checked,
+        note:document.getElementById('fNote').value.trim(),
+        staff:document.getElementById('fStaff').value
+      };
+    }
+
+    /* 前端先擋常見漏填，完整驗證以後端為準 */
+    function precheck(p){
+      if(!p.requestedDate)return '請選擇提出日期。';
+      if(!p.requestType)return '請選擇類型（新購或維修）。';
+      if(!p.content)return '請填寫內容，例如「R255 會議室電腦」。';
+      if(!Number.isInteger(p.quantity)||p.quantity<1||p.quantity>999)return '數量需為 1 到 999 的整數。';
+      if(!p.status)return '請選擇處理進度。';
+      if(!p.staff)return '請選擇處理人員。';
+      return '';
+    }
+
+    async function saveRequest(){
+      const p=collectForm();
+      const msg=precheck(p);
+      if(msg){showToast(msg,'err');return;}
+      const isEdit=!!state.editing;
+      if(isEdit){p.id=state.editing.id;p.version=state.editing.version;}
+
+      const btn=document.getElementById('btnSave');
+      btn.disabled=true;btn.textContent='處理中…';
+      state.busy=true;
+      const res=await api(isEdit?'apiUpdateRequest':'apiCreateRequest',p);
+      state.busy=false;
+      btn.disabled=false;btn.textContent='儲存';
+
+      if(!res.ok){
+        showToast(res.error,'err');
+        if(res.stale)loadData(true);   // 資料已被他人處理：自動重讀一次
+        return;
+      }
+      closeOverlay('editDrawer');
+      showToast(res.message,'ok');
+      state.history=null;              // 異動紀錄下次切過去時重讀
+      await loadData(true);
+    }
+
+    function openHistoryForEditing(){
+      if(!state.editing)return;
+      state.historyId=state.editing.id;
+      state.historyQ='';state.historyAction='';state.historyShown=PAGE_SIZE;
+      closeOverlay('editDrawer');
+      state.history=null;
+      switchTab('history');
+    }
+
+    /* =========================================================
+       七、刪除與復原
+       ========================================================= */
+    function openDelete(id){
+      const r=state.records.find(x=>x.id===id);
+      if(!r)return;
+      state.deleting={id:r.id,version:r.version,content:r.content};
+      document.getElementById('delName').textContent=r.content;
+      fillStaff('delStaff');
+      const btn=document.getElementById('btnDelete');btn.disabled=false;btn.textContent='刪除';
+      openOverlay('deleteModal');
+    }
+
+    async function confirmDelete(){
+      const staff=document.getElementById('delStaff').value;
+      if(!staff){showToast('請選擇處理人員。','err');return;}
+      const btn=document.getElementById('btnDelete');
+      btn.disabled=true;btn.textContent='處理中…';
+      state.busy=true;
+      const res=await api('apiDeleteRequest',{id:state.deleting.id,version:state.deleting.version,staff});
+      state.busy=false;
+      btn.disabled=false;btn.textContent='刪除';
+      if(!res.ok){showToast(res.error,'err');if(res.stale){closeOverlay('deleteModal');loadData(true);}return;}
+      closeOverlay('deleteModal');
+      showToast(res.message,'ok');
+      state.history=null;
+      await loadData(true);
+    }
+
+    function openRestore(id){
+      const r=state.records.find(x=>x.id===id);
+      if(!r)return;
+      state.restoring={id:r.id,content:r.content};
+      document.getElementById('resName').textContent=r.content;
+      fillStaff('resStaff');
+      const btn=document.getElementById('btnRestore');btn.disabled=false;btn.textContent='確認復原';
+      openOverlay('restoreModal');
+    }
+
+    async function confirmRestore(){
+      const staff=document.getElementById('resStaff').value;
+      if(!staff){showToast('請選擇處理人員。','err');return;}
+      const btn=document.getElementById('btnRestore');
+      btn.disabled=true;btn.textContent='處理中…';
+      state.busy=true;
+      const res=await api('apiRestoreRequest',{id:state.restoring.id,staff});
+      state.busy=false;
+      btn.disabled=false;btn.textContent='確認復原';
+      if(!res.ok){showToast(res.error,'err');if(res.stale){closeOverlay('restoreModal');loadData(true);}return;}
+      closeOverlay('restoreModal');
+      showToast(res.message,'ok');
+      state.history=null;
+      await loadData(true);
+    }
+
+    /* =========================================================
+       八、共用
+       ========================================================= */
+    function openOverlay(id){document.getElementById(id).classList.add('open');}
+    function closeOverlay(id){
+      document.getElementById(id).classList.remove('open');
+      if(id==='editDrawer')state.editing=null;
+    }
+
+    /* Esc 關閉最上層的視窗 */
+    document.addEventListener('keydown',e=>{
+      if(e.key!=='Escape')return;
+      for(const id of ['restoreModal','deleteModal','editDrawer']){
+        if(document.getElementById(id).classList.contains('open')){closeOverlay(id);break;}
+      }
+    });
+
+    /* 提示條裡的 <a role="button"> 支援鍵盤 Enter */
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&e.target.matches('a[role=button]'))e.target.click();
+    });
+
+    /* 金額格式：$12,345；空值顯示 -- */
+    function money(v){
+      if(v===''||v===null||v===undefined||isNaN(Number(v)))return '--';
+      return '$'+Number(v).toLocaleString('en-US');
+    }
+
+    /* HTML 跳脫：所有使用者輸入的文字都要經過這裡，避免 XSS */
+    function esc(s){
+      return String(s===undefined||s===null?'':s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    /* ===== 提示訊息：type 為 ok／err／info，3.5 秒後消失 ===== */
+    function showToast(msg,type='info'){
+      const t=document.getElementById('toast');
+      t.textContent=msg;
+      t.className='toast show '+type;
+      clearTimeout(showToast._timer);
+      showToast._timer=setTimeout(()=>t.classList.remove('show'),3500);
+    }
+
+    /* =========================================================
+       九、初始化
+       ========================================================= */
+    renderStatusGroup();
+    hydrateIcons();
+    renderNav();
+    renderToolbar();
+    // 數量、金額欄位：輸入時即過濾非數字
+    document.getElementById('fQty').addEventListener('input',e=>{const v=e.target.value.replace(/\D/g,'');if(v!==e.target.value)e.target.value=v;});
+    document.getElementById('fQty').addEventListener('blur',e=>{e.target.value=clampQty(parseInt(e.target.value,10)||1);});
+    document.getElementById('fAmount').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'');updateAmountHelp();});
+    document.getElementById('fInvoice').addEventListener('change',updateCloseWarn);
+    document.getElementById('fGoods').addEventListener('change',updateCloseWarn);
+    state.token=loadToken();
+    if(state.token)loadData(false);   // 通行證失效時 api() 會自動切回登入畫面
+    else showLogin('');
+  </script>
+</body>
+</html>

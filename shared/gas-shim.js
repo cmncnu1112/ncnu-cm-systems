@@ -88,13 +88,22 @@
    * 使用 text/plain 是為了避免瀏覽器發出 CORS 預檢（GAS 不處理 OPTIONS）
    */
   function callGas(fnName, args) {
+    // 轉送設定：window.gasRoutes[函式名稱] = { url, fn, onCall, onData }
+    // 用於把特定呼叫（例如後台登入）改送到其他 GAS 專案，並在成功後執行 onData
+    var route = window.gasRoutes && window.gasRoutes[fnName];
+    var targetUrl = (route && route.url) || GAS_URL;
+    var targetFn = (route && route.fn) || fnName;
+    if (route && typeof route.onCall === 'function') {
+      try { route.onCall(args); } catch (e) {}
+    }
+
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timer = controller ? setTimeout(function () { controller.abort(); }, TIMEOUT_MS) : null;
 
-    return fetch(GAS_URL, {
+    return fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ fn: fnName, args: args.map(normalizeArg), token: currentToken() }),
+      body: JSON.stringify({ fn: targetFn, args: args.map(normalizeArg), token: currentToken() }),
       signal: controller ? controller.signal : undefined
     })
       .then(function (res) {
@@ -115,6 +124,9 @@
             try { window.gasOnAuthRequired(result.error); } catch (e) {}
           }
           throw new Error(result.error || '後端執行失敗');
+        }
+        if (route && typeof route.onData === 'function') {
+          try { route.onData(result.data); } catch (e) {}
         }
         return result.data;
       })

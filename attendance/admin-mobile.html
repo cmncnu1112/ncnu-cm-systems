@@ -13,7 +13,11 @@
   3. 修改 config.js 或 gas-shim.js 後，請把 ?v= 後面的數字加 1，避免手機讀到舊檔。
 -->
 <script src="./config.js?v=1"></script>
-<script src="../shared/gas-shim.js?v=1"></script>
+<script src="../shared/gas-shim.js?v=3"></script>
+<!-- 管院後台共用登入：一次登入，所有系統後台通行（設定說明見 shared/admin-sso.js） -->
+<script>window.CM_ADMIN = {"tokenKey": "adminDutyToken", "loginFn": "adminLogin", "logoutFn": "logout", "identityKey": "adminDutyUser", "identityValue": {"name": "管理員", "studentId": "", "role": "admin"}};</script>
+<script src="../shared/sso-config.js?v=1"></script>
+<script src="../shared/admin-sso.js?v=1"></script>
 <title>管理後台｜手機版</title>
 <style>
 :root{--bg:#f4f4f4;--panel:#ffffff;--panel2:#ffffff;--panel3:#f4f4f4;--text:#161616;--muted:#6f6f6f;--line:#e0e0e0;--accent:#1e3a8a;--accent2:#172b66;--blue:#1e3a8a;--danger:#da1e28;--warn:#b45309;--shadow:none}

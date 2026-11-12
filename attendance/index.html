@@ -1,0 +1,2507 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!--
+  ===== GitHub Pages 版設定（2026-11 由 GAS HtmlService 搬出）：值班電腦版（工讀生） =====
+  1. GAS 後端網址統一寫在同資料夾的 config.js，四個頁面共用，只需改一處。
+  2. gas-shim.js 模擬 google.script.run，頁面內原本的 call()／google.script.run 寫法不需修改。
+  3. 修改 config.js 或 gas-shim.js 後，請把 ?v= 後面的數字加 1，避免手機讀到舊檔。
+-->
+<script src="./config.js?v=1"></script>
+<script src="../shared/gas-shim.js?v=1"></script>
+<title>管理學院值班系統</title>
+<style>
+:root{--bg:#f4f4f4;--panel:#ffffff;--panel2:#ffffff;--panel3:#f4f4f4;--text:#161616;--muted:#6f6f6f;--line:#e0e0e0;--accent:#1e3a8a;--accent2:#172b66;--danger:#da1e28;--warn:#b45309;--ok:#24a148;--shadow:none}
+[data-theme="light"]{--bg:#f4f4f4;--panel:#ffffff;--panel2:#ffffff;--panel3:#f4f4f4;--text:#161616;--muted:#6f6f6f;--line:#e0e0e0;--accent:#1e3a8a;--accent2:#172b66;--danger:#da1e28;--warn:#b45309;--ok:#24a148;--shadow:none}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;background:radial-gradient(circle at 88% 0,color-mix(in srgb,var(--accent) 12%,transparent),transparent 30%),var(--bg);background-attachment:fixed;background-repeat:no-repeat;background-size:100vw 100vh,auto;color:var(--text);font-family:"Microsoft JhengHei UI","Microsoft JhengHei","Noto Sans TC","Segoe UI",Arial,sans-serif;transition:.2s}button,input,select,textarea{font:inherit}
+.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}.top-inner{max-width:1180px;margin:auto;padding:15px 18px;display:flex;justify-content:space-between;align-items:center;gap:14px}.brand:before{content:"CONTROL TERMINAL";display:block;color:var(--accent);font:800 9px ui-monospace,monospace;letter-spacing:1.8px;margin-bottom:5px}.brand h1{margin:0;font-size:21px}.brand p{margin:4px 0 0;color:var(--muted);font-size:12px}.top-actions{display:flex;gap:8px;align-items:center}
+.icon-btn,.btn{border:1px solid var(--line);border-radius:11px;background:var(--panel3);color:var(--text);cursor:pointer;font-weight:750;transition:.16s}.icon-btn{width:42px;height:40px;min-width:42px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;font-size:19px;text-decoration:none}.icon-btn svg{width:19px;height:19px;display:block;stroke:currentColor}.btn{padding:10px 14px}.btn:hover,.icon-btn:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}.primary{background:linear-gradient(135deg,var(--accent2),var(--accent));color:#191403;border-color:transparent;width:100%;font-size:16px}.soft{background:var(--panel3)}.danger{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,var(--panel));border-color:color-mix(in srgb,var(--danger) 30%,var(--line))}
+.wrap{max-width:1180px;margin:18px auto;padding:0 18px}.function-bar{display:flex;gap:8px;padding:7px;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow);margin-bottom:12px;overflow:auto}.function-bar button{white-space:nowrap;border:0;background:transparent;color:var(--muted);padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer}.function-bar button.active,.function-bar button:hover{background:var(--panel3);color:var(--accent)}
+.notice{display:flex;align-items:center;gap:11px;padding:10px 13px;border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--panel));border-radius:13px;margin-bottom:14px}.notice-icon{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:color-mix(in srgb,var(--accent) 14%,var(--panel));color:var(--accent);font-weight:900}.notice b{font-size:12px;color:var(--accent);margin-right:8px}.notice span{font-size:12px;color:var(--muted)}
+.view{display:none}.view.active{display:block}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}.stat,.card{background:linear-gradient(145deg,color-mix(in srgb,var(--panel2) 96%,transparent),var(--panel));border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow)}.stat{padding:15px;border-left:3px solid var(--accent);min-height:78px;display:flex;flex-direction:column;justify-content:center}.stat b{font:850 24px ui-monospace,monospace;color:var(--accent);display:block}.stat span,.muted{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;align-items:start}.grid>div{min-width:0}.card{min-width:0}.dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:'hero duty' 'todo request';gap:15px;align-items:stretch}.dashboard-grid .card{margin-bottom:0;height:100%}.dash-hero{grid-area:hero}.dash-duty{grid-area:duty}.dash-todo{grid-area:todo}.dash-request{grid-area:request}.card{padding:19px;margin-bottom:15px}.card h2,.card h3{margin:0 0 14px}.hero{text-align:center;padding:27px}.avatar{width:54px;height:54px;border-radius:15px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 11%,var(--panel));border:1px solid color-mix(in srgb,var(--accent) 36%,var(--line));color:var(--accent);font-weight:900;margin:0 auto 10px}.clock{font:850 38px ui-monospace,monospace;color:var(--accent);margin:10px 0}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.badge{font-size:12px;padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--ok) 11%,var(--panel));color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 28%,var(--line));white-space:nowrap}.badge.warn{background:color-mix(in srgb,var(--warn) 11%,var(--panel));color:var(--warn)}.badge.bad{background:color-mix(in srgb,var(--danger) 11%,var(--panel));color:var(--danger)}
+input,textarea,select{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);outline:none;margin:6px 0 11px}input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}select option{background:var(--panel);color:var(--text)}
+.tools{
+  display:grid;
+  grid-template-columns:145px 145px auto;
+  align-items:end;
+  gap:10px;
+  margin-bottom:14px;
+  width:max-content;
+  max-width:100%;
+}
+.tools label{
+  min-width:0;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  font-size:12px;
+  line-height:1.35;
+  color:var(--muted);
+  font-weight:800;
+}
+.tools label select{
+  width:145px;
+  height:44px;
+  min-height:44px;
+  margin:7px 0 0;
+  padding:9px 34px 9px 11px;
+  border-radius:11px;
+}
+.tools > .btn{
+  height:44px;
+  min-height:44px;
+  margin:0;
+  padding:0 15px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+  align-self:end;
+}.att-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin:12px 0}.mini{padding:12px;border-radius:13px;background:var(--panel3);border:1px solid var(--line)}.mini b{display:block;font-size:20px;color:var(--accent)}.calendar-head,.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px}.calendar-head div{text-align:center;color:var(--muted);font-size:11px;padding:6px;line-height:1}.day{min-width:0;min-height:96px;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:9px;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start}.day.off{opacity:.38}.day .n{height:20px;display:flex;align-items:flex-start;font:800 13px/1 ui-monospace,monospace}.day .sch{font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4}.day .st{font-size:11px;font-weight:850;margin-top:8px}.day.good .st{color:var(--ok)}.day.missing .st{color:var(--danger)}.day.leave .st{color:var(--accent)}.day.pending .st{color:var(--warn)}
+.leave-form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.leave-form .full{grid-column:1/-1}.history{margin-top:12px}.empty{text-align:center;color:var(--muted);padding:20px}
+dialog{border:1px solid var(--line);border-radius:18px;max-width:450px;width:calc(100% - 30px);padding:22px;background:var(--panel2);color:var(--text);box-shadow:0 24px 80px rgba(0,0,0,.42)}dialog::backdrop{background:rgba(0,0,0,.62)}.actions{display:flex;gap:8px;justify-content:flex-end}.segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px}.segmented label{margin:0}.segmented input{position:absolute;opacity:0}.segmented span{display:flex;align-items:center;justify-content:center;min-height:42px;border:1px solid var(--line);border-radius:10px;color:var(--muted);cursor:pointer;font-size:12px;font-weight:800}.segmented input:checked+span{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
+
+.date-field{display:block}
+.date-display-btn{width:100%;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:10px 12px;text-align:left;cursor:pointer;font-weight:650}
+.date-display-btn:hover{border-color:var(--accent)}
+.date-display-btn.placeholder{color:var(--muted);font-weight:500}
+.calendar-picker{max-width:390px!important;width:calc(100% - 30px)!important}
+.picker-month-head{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;gap:8px;margin:14px 0}
+.picker-month-head b{text-align:center}
+.picker-nav{width:38px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--panel3);color:var(--text);cursor:pointer}
+.picker-week,.picker-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.picker-week div{text-align:center;color:var(--muted);font-size:11px;padding:5px}
+.picker-day{height:39px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--text);cursor:pointer}
+.picker-day:hover{background:var(--panel3);border-color:var(--line)}
+.picker-day.selected{background:color-mix(in srgb,var(--accent) 14%,var(--panel));border-color:var(--accent);color:var(--accent);font-weight:850}
+.picker-day.today{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent)}
+.picker-day.blank{visibility:hidden}
+.picker-footer{display:flex;justify-content:space-between;gap:8px;margin-top:14px}
+.dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.dialog-head h2{margin:0 0 4px}
+.dialog-x{width:34px;height:34px;min-width:34px;border:1px solid var(--line);border-radius:9px;background:var(--panel3);color:var(--text);font-size:20px;line-height:1;cursor:pointer}
+
+
+/* Loading Overlay */
+.loading-overlay{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  display:none;
+  place-items:center;
+  padding:24px;
+  background:color-mix(in srgb,var(--bg) 72%,rgba(0,0,0,.30));
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+.loading-overlay.show{display:grid}
+.loading-card{
+  width:min(300px,calc(100vw - 40px));
+  padding:24px 22px 22px;
+  text-align:center;
+  border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));
+  border-radius:20px;
+  background:linear-gradient(145deg,var(--panel-2,var(--panel2,var(--surface))),var(--panel,var(--surface)));
+  color:var(--text);
+  box-shadow:0 22px 64px rgba(0,0,0,.22);
+}
+.loading-spinner{
+  width:42px;
+  height:42px;
+  margin:0 auto 15px;
+  border:3px solid color-mix(in srgb,var(--accent) 18%,var(--line));
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:loadingSpin .78s linear infinite;
+}
+.loading-brand{
+  margin-bottom:5px;
+  color:var(--accent);
+  font:800 9px ui-monospace,monospace;
+  letter-spacing:1.7px;
+}
+.loading-text{
+  font-size:17px;
+  line-height:1.35;
+  font-weight:850;
+}
+.loading-sub{
+  margin-top:6px;
+  color:var(--muted);
+  font-size:12px;
+}
+@keyframes loadingSpin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;right:18px;bottom:18px;background:var(--text);color:var(--bg);padding:12px 16px;border-radius:11px;display:none;z-index:30;box-shadow:var(--shadow)}
+
+/* V9.8 部分請假時間欄位：隱藏時不佔格，與現有膠囊表單對齊。 */
+.leave-form > [hidden]{display:none!important}
+.leave-form .leave-partial-field input{border-radius:999px!important}
+#lvTimeHint{margin:0;line-height:1.6}
+/* V8.1 表單對齊修正 */
+.leave-form{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  column-gap:14px;
+  row-gap:14px;
+  align-items:start;
+}
+.leave-form > label{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  margin:0;
+  font-size:14px;
+  font-weight:650;
+}
+.leave-form > label.full,
+.leave-form > .full{grid-column:1/-1}
+.leave-form > label > select,
+.leave-form > label > input:not([type="hidden"]),
+.leave-form > label > textarea,
+.leave-form > label > .date-display-btn{
+  width:100%;
+  margin:7px 0 0;
+}
+.leave-form > label > select,
+.leave-form > label > input:not([type="hidden"]),
+.leave-form > label > .date-display-btn{
+  height:46px;
+  min-height:46px;
+  padding:10px 12px;
+  border-radius:11px;
+}
+.leave-form > label > textarea{
+  min-height:104px;
+  resize:vertical;
+}
+.leave-form .date-display-btn{
+  display:flex;
+  align-items:center;
+}
+.makeup-time-placeholder{
+  min-height:1px;
+}
+
+@media(max-width:760px){
+  .tools{
+    width:100%;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+  }
+  .tools label select{width:100%}
+  .tools > .btn{
+    grid-column:1/-1;
+    width:100%;
+  }
+.grid{grid-template-columns:1fr}.dashboard-grid{grid-template-columns:1fr;grid-template-areas:'hero' 'duty' 'todo' 'request'.summary,.att-summary{grid-template-columns:1fr 1fr}.top-inner{align-items:flex-start}.calendar-head,.calendar{gap:4px}.day{min-height:76px;padding:6px}.day .sch{display:none}.leave-form{grid-template-columns:1fr}.leave-form > label.full,.leave-form > .full{grid-column:auto}.notice{align-items:flex-start}}
+</style>
+
+<style id="unified-ui-v90">
+:root{--ui-control-h:44px}
+body{background-position:0 0}
+button.btn,button.icon-btn,button.date-display-btn,button.picker-nav,button.dialog-x{
+  box-sizing:border-box!important;height:44px!important;min-height:44px!important;border-radius:999px!important;font-size:14px!important;
+}
+button.btn{padding:0 16px!important}
+button.icon-btn,button.picker-nav,button.dialog-x{
+  width:44px!important;min-width:44px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
+}
+.function-bar button{min-height:42px!important;border-radius:999px!important;padding:0 15px!important}
+.segmented span{min-height:42px!important;border-radius:999px!important}
+.picker-day{border-radius:999px!important}
+.badge.warn{color:var(--warn)!important;background:color-mix(in srgb,var(--warn) 10%,var(--panel))!important;border-color:color-mix(in srgb,var(--warn) 38%,var(--line))!important}
+.badge.bad{color:var(--danger)!important;background:color-mix(in srgb,var(--danger) 10%,var(--panel))!important;border-color:color-mix(in srgb,var(--danger) 38%,var(--line))!important}
+.day.pending{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))!important;background:color-mix(in srgb,var(--warn) 8%,var(--panel))!important}
+.day.pending .st{color:var(--warn)!important}
+</style>
+
+
+
+
+
+<style id="terminal-login-standard-v2">
+/* =========================================================
+   統一登入介面
+   參考 Admin Mobile：同背景、同卡片、同欄位、同按鈕。
+   ========================================================= */
+:root{
+  --login-w:430px;
+  --login-side:18px;
+  --login-radius:22px;
+}
+
+/* ---- common full-page/login dialog backdrop ---- */
+#loginScreen.login-screen{
+  width:100%!important;
+  min-height:100dvh!important;
+  margin:0!important;
+  padding:
+    calc(24px + env(safe-area-inset-top))
+    var(--login-side)
+    calc(24px + env(safe-area-inset-bottom))!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:
+    radial-gradient(circle at 50% 0,
+      color-mix(in srgb,var(--accent) 9%,transparent) 0,
+      transparent 33%),
+    var(--bg)!important;
+  background-attachment:fixed!important;
+  background-size:100vw 100vh,auto!important;
+  background-repeat:no-repeat!important;
+}
+
+/* IMPORTANT: login success must really remove the Mobile login screen. */
+#loginScreen.login-screen.hidden{
+  display:none!important;
+}
+
+/* Mobile shell and dialog use the exact same width. */
+.terminal-login-shell,
+#loginBox.terminal-login-dialog,
+#adminLogin.terminal-login-dialog{
+  box-sizing:border-box!important;
+  width:min(var(--login-w),calc(100vw - (var(--login-side) * 2)))!important;
+  max-width:var(--login-w)!important;
+}
+
+.terminal-login-shell{
+  margin:0 auto!important;
+}
+
+/* Dialog itself is transparent — card is the only visible panel. */
+#loginBox.terminal-login-dialog,
+#adminLogin.terminal-login-dialog{
+  padding:0!important;
+  border:0!important;
+  outline:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+#loginBox.terminal-login-dialog::backdrop,
+#adminLogin.terminal-login-dialog::backdrop{
+  background:
+    radial-gradient(circle at 50% 0,
+      color-mix(in srgb,var(--accent) 9%,transparent) 0,
+      transparent 33%),
+    var(--bg)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+
+/* ---- brand ---- */
+.terminal-login-brand{
+  width:100%!important;
+  margin:0 0 20px!important;
+  padding:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+}
+.terminal-login-brand .sys{
+  width:100%!important;
+  margin:0 0 7px!important;
+  color:var(--accent)!important;
+  font:800 10px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace!important;
+  letter-spacing:1.8px!important;
+  text-align:center!important;
+}
+.terminal-login-brand h1{
+  width:100%!important;
+  margin:0 0 7px!important;
+  color:var(--text)!important;
+  font-size:24px!important;
+  line-height:1.25!important;
+  font-weight:900!important;
+  text-align:center!important;
+}
+.terminal-login-brand p{
+  width:100%!important;
+  margin:0!important;
+  color:var(--muted)!important;
+  font-size:14px!important;
+  line-height:1.45!important;
+  text-align:center!important;
+}
+
+/* ---- card ---- */
+.terminal-login-card{
+  box-sizing:border-box!important;
+  width:100%!important;
+  padding:20px!important;
+  border:1px solid var(--line)!important;
+  border-radius:var(--login-radius)!important;
+  background:var(--panel)!important;
+  box-shadow:0 16px 40px rgba(0,0,0,.11)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+[data-theme="dark"] .terminal-login-card{
+  box-shadow:0 16px 40px rgba(0,0,0,.28)!important;
+}
+.terminal-login-card h2{
+  margin:0 0 16px!important;
+  color:var(--text)!important;
+  font-size:19px!important;
+  line-height:1.3!important;
+  font-weight:900!important;
+}
+.terminal-login-card label{
+  display:block!important;
+  color:var(--text)!important;
+  font-size:13px!important;
+  line-height:1.4!important;
+  font-weight:800!important;
+}
+.terminal-login-card input{
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:48px!important;
+  min-height:48px!important;
+  margin:6px 0 12px!important;
+  padding:0 14px!important;
+  border:1px solid var(--line)!important;
+  border-radius:13px!important;
+  background:var(--panel-2)!important;
+  color:var(--text)!important;
+  outline:none!important;
+  box-shadow:none!important;
+  font-size:16px!important;
+  line-height:1!important;
+}
+.terminal-login-card input:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 13%,transparent)!important;
+}
+.terminal-login-card input::placeholder{
+  color:var(--muted)!important;
+  opacity:.9!important;
+}
+.terminal-login-note{
+  margin:0 0 14px!important;
+  color:var(--muted)!important;
+  font-size:12px!important;
+  line-height:1.55!important;
+}
+.terminal-login-card .terminal-login-submit{
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:46px!important;
+  min-height:46px!important;
+  margin:0!important;
+  padding:0 18px!important;
+  border-radius:999px!important;
+  font-size:14px!important;
+  line-height:1!important;
+  font-weight:900!important;
+}
+
+/* ---- responsive ---- */
+@media(max-width:768px){
+  :root{--login-side:16px}
+  .terminal-login-brand h1{font-size:23px!important}
+}
+@media(max-width:480px){
+  :root{
+    --login-side:14px;
+    --login-radius:20px;
+  }
+  #loginScreen.login-screen{
+    padding-top:calc(20px + env(safe-area-inset-top))!important;
+    padding-bottom:calc(20px + env(safe-area-inset-bottom))!important;
+  }
+  .terminal-login-brand{
+    margin-bottom:18px!important;
+  }
+  .terminal-login-brand h1{
+    font-size:22px!important;
+  }
+  .terminal-login-card{
+    padding:18px!important;
+  }
+}
+@media(max-height:650px) and (orientation:landscape){
+  #loginScreen.login-screen{
+    align-items:flex-start!important;
+    overflow:auto!important;
+    padding-top:14px!important;
+    padding-bottom:14px!important;
+  }
+  #loginBox.terminal-login-dialog,
+  #adminLogin.terminal-login-dialog{
+    margin-top:12px!important;
+    margin-bottom:12px!important;
+  }
+  .terminal-login-brand{
+    margin-bottom:12px!important;
+  }
+}
+</style>
+
+
+<style id="index-todo-mobile-sync-v94">
+#todos .todo-complete-btn,
+#todos .todo-done-badge{
+  box-sizing:border-box!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:30px!important;
+  min-height:30px!important;
+  padding:0 10px!important;
+  margin:0!important;
+  border-radius:999px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 auto!important;
+  font-size:12px!important;
+  line-height:1!important;
+  font-weight:850!important;
+  white-space:nowrap!important;
+}
+#todos .todo-complete-btn{
+  color:var(--accent)!important;
+  border:1px solid color-mix(in srgb,var(--accent) 38%,var(--line))!important;
+  background:color-mix(in srgb,var(--accent) 8%,var(--panel))!important;
+}
+#todos .todo-done-badge{
+  color:var(--ok)!important;
+  border-color:color-mix(in srgb,var(--ok) 32%,var(--line))!important;
+  background:color-mix(in srgb,var(--ok) 9%,var(--panel))!important;
+}
+</style>
+
+
+<style id="unified-list-field-system-v95">
+:root{
+  --ui-list-row-h:44px;
+  --ui-field-h:42px;
+}
+
+/* 一般列表：以 Admin 請假已核准單列的密度為基準 */
+.row{
+  min-height:var(--ui-list-row-h)!important;
+  padding:6px 0!important;
+  gap:10px!important;
+}
+.row>div{min-width:0}
+.history .row,
+#duties .row,
+#todos .row,
+#requests .row,
+#makeupHistory .row,
+#leaveHistory .row{
+  min-height:var(--ui-list-row-h)!important;
+}
+.row b{line-height:1.3!important}
+.row .muted{line-height:1.35!important}
+
+/* 所有單行輸入、選擇、日期控制都統一膠囊 */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+select,
+.date-display-btn,
+.select-trigger,
+.date-trigger{
+  box-sizing:border-box!important;
+  height:var(--ui-field-h)!important;
+  min-height:var(--ui-field-h)!important;
+  border-radius:999px!important;
+  padding-left:14px!important;
+  padding-right:14px!important;
+}
+textarea{
+  border-radius:20px!important;
+  padding:12px 14px!important;
+}
+.terminal-login-card input{
+  border-radius:999px!important;
+}
+</style>
+
+
+<style id="index-admin-header-sync-v96">
+/* =========================================================
+   Index header controls mirror Admin:
+   44×44 theme / refresh / red logout
+   ========================================================= */
+.top-actions{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+.top-actions .index-head-icon{
+  box-sizing:border-box!important;
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  max-height:44px!important;
+  padding:0!important;
+  margin:0!important;
+  border-radius:999px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 44px!important;
+  font-size:0!important;
+  line-height:1!important;
+}
+.top-actions .index-head-icon svg{
+  width:20px!important;
+  height:20px!important;
+  display:block!important;
+  stroke:currentColor!important;
+}
+.top-actions .icon-theme{
+  color:var(--text)!important;
+  border:1px solid var(--line)!important;
+  background:var(--panel3)!important;
+}
+.top-actions .refresh-icon-btn{
+  color:var(--text)!important;
+  border:1px solid var(--line)!important;
+  background:var(--panel3)!important;
+}
+.top-actions .index-logout-icon{
+  color:var(--danger)!important;
+  border:1px solid color-mix(in srgb,var(--danger) 42%,var(--line))!important;
+  background:color-mix(in srgb,var(--danger) 7%,var(--panel3))!important;
+}
+
+/* =========================================================
+   Function bar: every item gets same icon box + baseline.
+   Fixes ↺ 補打卡 visual misalignment.
+   ========================================================= */
+.function-bar{
+  align-items:center!important;
+}
+.function-bar button{
+  box-sizing:border-box!important;
+  height:42px!important;
+  min-height:42px!important;
+  padding:0 14px!important;
+  border-radius:999px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  line-height:1!important;
+  vertical-align:middle!important;
+}
+.function-bar .function-nav-icon{
+  width:18px!important;
+  min-width:18px!important;
+  height:18px!important;
+  min-height:18px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 18px!important;
+  font-size:16px!important;
+  line-height:18px!important;
+  font-family:"Segoe UI Symbol","Microsoft JhengHei UI","Microsoft JhengHei",sans-serif!important;
+}
+.function-bar .function-nav-icon-makeup{
+  transform:translateY(-.5px)!important;
+}
+.function-bar button>span:last-child{
+  display:inline-flex!important;
+  align-items:center!important;
+  height:18px!important;
+  line-height:18px!important;
+}
+</style>
+
+
+
+
+
+<style id="index-todo-completion-note-v97">
+#todoCompleteDialog{
+  width:min(460px,calc(100vw - 28px))!important;
+  max-width:460px!important;
+  padding:20px!important;
+  border:1px solid var(--line)!important;
+  border-radius:22px!important;
+  background:var(--panel)!important;
+  color:var(--text)!important;
+  box-shadow:0 20px 55px rgba(0,0,0,.18)!important;
+}
+#todoCompleteDialog::backdrop{
+  background:rgba(20,18,13,.42)!important;
+  backdrop-filter:blur(4px)!important;
+  -webkit-backdrop-filter:blur(4px)!important;
+}
+#todoCompleteDialog .todo-complete-note{
+  display:block!important;
+  margin-top:14px!important;
+  color:var(--text)!important;
+  font-size:13px!important;
+  font-weight:800!important;
+}
+#todoCompleteDialog textarea{
+  box-sizing:border-box!important;
+  width:100%!important;
+  min-height:120px!important;
+  margin-top:7px!important;
+  resize:vertical!important;
+}
+#todoCompleteDialog .todo-note-help{
+  margin-top:8px!important;
+  color:var(--muted)!important;
+  font-size:12px!important;
+  line-height:1.5!important;
+}
+#todoCompleteDialog .dialog-actions{
+  margin-top:16px!important;
+  display:flex!important;
+  justify-content:flex-end!important;
+  gap:8px!important;
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+
+<style id="transparent-overlay-scrollbar-v1">
+/* =========================================================
+   Transparent scrollbar architecture
+   Desktop:
+   - root native scrollbar is hidden (therefore no white track/gutter)
+   - custom floating thumb only, no visible track
+   Nested scroll areas:
+   - native thumb retained
+   - track explicitly transparent
+   ========================================================= */
+
+html,
+body{
+  background-color:var(--bg)!important;
+}
+
+html[data-theme="light"]{color-scheme:light!important}
+html[data-theme="dark"]{color-scheme:dark!important}
+
+/* All nested scrollable controls: transparent track */
+*{
+  scrollbar-color:
+    color-mix(in srgb,var(--muted) 42%,transparent)
+    transparent;
+}
+*::-webkit-scrollbar{
+  width:8px;
+  height:8px;
+  background:transparent!important;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner{
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  box-shadow:none!important;
+}
+*::-webkit-scrollbar-thumb{
+  background:color-mix(in srgb,var(--muted) 40%,transparent)!important;
+  border:2px solid transparent!important;
+  border-radius:999px!important;
+  background-clip:padding-box!important;
+  box-shadow:none!important;
+}
+*::-webkit-scrollbar-thumb:hover{
+  background:color-mix(in srgb,var(--muted) 58%,transparent)!important;
+  border:2px solid transparent!important;
+  background-clip:padding-box!important;
+}
+
+/* Desktop: completely remove browser root scrollbar.
+   No native gutter = no white vertical strip and no layout shift. */
+@media (hover:hover) and (pointer:fine){
+  html,
+  body{
+    scrollbar-width:none!important;
+  }
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar{
+    width:0!important;
+    height:0!important;
+    display:none!important;
+    background:transparent!important;
+  }
+}
+
+/* Floating visual thumb: track is literally transparent/non-existent. */
+.floating-page-scrollbar{
+  position:fixed!important;
+  z-index:2147482000!important;
+  top:5px!important;
+  right:3px!important;
+  bottom:5px!important;
+  width:7px!important;
+  pointer-events:none!important;
+  opacity:0!important;
+  transition:opacity .16s ease!important;
+}
+.floating-page-scrollbar.show{
+  opacity:.78!important;
+}
+.floating-page-scrollbar-thumb{
+  position:absolute!important;
+  top:0!important;
+  right:0!important;
+  width:5px!important;
+  min-height:34px!important;
+  border-radius:999px!important;
+  background:color-mix(in srgb,var(--muted) 52%,transparent)!important;
+  box-shadow:none!important;
+  will-change:transform,height!important;
+}
+[data-theme="dark"] .floating-page-scrollbar-thumb{
+  background:color-mix(in srgb,var(--muted) 58%,transparent)!important;
+}
+
+@media (hover:none), (pointer:coarse){
+  .floating-page-scrollbar{display:none!important}
+}
+</style>
+
+
+<style id="unified-font-system-v1">
+:root{
+  --ui-font:"Microsoft JhengHei UI","Microsoft JhengHei","Noto Sans TC","Segoe UI",Arial,sans-serif;
+}
+
+/* 全平台文字統一使用同一字型。
+   SVG icon 不受影響；Unicode symbol 若主字型缺字會由系統自動 fallback。 */
+html,
+body,
+body *,
+button,
+input,
+select,
+textarea,
+dialog,
+dialog *{
+  font-family:var(--ui-font)!important;
+}
+
+/* 覆蓋原本刻意使用 monospace 的系統小標，讓字體也完全一致 */
+html body .terminal-login-brand .sys,
+html body .login-brand .sys,
+html body .head .sys,
+html body .brand::before,
+html body .auth-loading-brand,
+html body .changelog-date,
+html body .version-pill{
+  font-family:var(--ui-font)!important;
+}
+</style>
+
+
+<style id="index-todo-dialog-pill-v103">
+/* 待辦完成 Dialog 的操作按鈕跟其他狀態/操作膠囊一致，
+   不再使用大型 42~46px 動作按鈕。 */
+#todoCompleteDialog .dialog-actions{
+  align-items:center!important;
+  gap:8px!important;
+}
+#todoCompleteDialog .dialog-actions .btn{
+  box-sizing:border-box!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:30px!important;
+  min-height:30px!important;
+  max-height:30px!important;
+  padding:0 12px!important;
+  margin:0!important;
+  border-radius:999px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  font-size:12px!important;
+  line-height:1!important;
+  font-weight:800!important;
+  white-space:nowrap!important;
+  flex:0 0 auto!important;
+}
+#todoCompleteDialog .dialog-actions .btn.primary{
+  min-width:122px!important;
+}
+
+/* 多行備註保留正常可讀高度，不跟單行膠囊控制項一起被壓扁 */
+#todoCompleteDialog textarea{
+  min-height:110px!important;
+}
+</style>
+
+
+<style id="index-dual-seat-v110">
+.dual-seat-section{margin-bottom:16px;padding:18px;border:1px solid var(--line);border-radius:22px;background:var(--panel);box-shadow:var(--shadow)}
+.dual-seat-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px}
+.dual-seat-heading h2{margin:2px 0 4px;font-size:22px}.dual-seat-heading p{margin:0;color:var(--muted);font-size:13px}
+.dual-seat-kicker{color:var(--accent);font-size:10px;font-weight:900;letter-spacing:.14em}
+.active-seat-summary{flex:0 0 auto;min-height:30px;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);display:inline-flex;align-items:center;font-size:12px;font-weight:800;color:var(--muted)}
+.dual-seat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.seat-card{min-width:0;padding:16px;border:1px solid var(--line);border-radius:18px;background:var(--panel2);transition:border-color .16s ease,box-shadow .16s ease}
+.seat-card.active{border-color:color-mix(in srgb,var(--accent) 62%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 10%,transparent)}
+.seat-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.seat-card-head h3{margin:2px 0;font-size:19px}
+.seat-card-id,.seat-card-label,.seat-card-status{color:var(--muted);font-size:12px}.seat-card-label{font-weight:900;letter-spacing:.08em;color:var(--accent)}
+.seat-login-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.seat-login-grid label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:12px;font-weight:800}
+.seat-login-grid input{width:100%;height:42px!important;min-height:42px!important;border-radius:999px!important}.seat-login-submit{grid-column:1/-1;width:100%;height:36px!important;min-height:36px!important;border-radius:999px!important}
+.seat-user-body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.seat-punch-state{min-width:0}.seat-punch-state b{display:block;margin-bottom:4px;font-size:14px}.seat-punch-state span{display:block;color:var(--muted);font-size:12px;line-height:1.45}
+.seat-punch-btn{min-width:112px;height:36px!important;min-height:36px!important;border-radius:999px!important}
+.seat-card-actions{margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px}.seat-card-actions-left{display:flex;gap:7px;flex-wrap:wrap}
+.seat-mini-btn{height:30px!important;min-height:30px!important;padding:0 11px!important;border-radius:999px!important;font-size:11px!important}
+.seat-logout-btn{width:30px!important;min-width:30px!important;height:30px!important;min-height:30px!important;padding:0!important;border-radius:999px!important;color:var(--danger)!important;border-color:color-mix(in srgb,var(--danger) 40%,var(--line))!important;background:color-mix(in srgb,var(--danger) 7%,var(--panel2))!important}
+.seat-logout-btn svg{width:16px;height:16px;stroke:currentColor}
+.active-seat-bar{margin:0 0 12px;min-height:42px;padding:6px 10px 6px 14px;border:1px solid var(--line);border-radius:999px;background:var(--panel);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.active-seat-bar-label{color:var(--muted);font-size:12px;font-weight:800;white-space:nowrap}.active-seat-bar-buttons{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.active-seat-choice{height:28px!important;min-height:28px!important;padding:0 10px!important;border-radius:999px!important;font-size:11px!important}.active-seat-choice.active{color:#111!important;border-color:var(--accent)!important;background:var(--accent)!important}
+.dual-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dual-dashboard-grid .dash-request{grid-column:1/-1}.todo-complete-actor{margin-top:3px;color:var(--accent)!important;font-weight:800}
+@media(max-width:900px){.dual-seat-grid,.dual-dashboard-grid{grid-template-columns:1fr}.dual-dashboard-grid .dash-request{grid-column:auto}}
+@media(max-width:620px){.dual-seat-heading{flex-direction:column}.seat-login-grid{grid-template-columns:1fr}.seat-login-submit{grid-column:1}.seat-user-body{grid-template-columns:1fr}.seat-punch-btn{width:100%}.active-seat-bar{align-items:flex-start;border-radius:18px;flex-direction:column}.active-seat-bar-buttons{width:100%;justify-content:flex-start}}
+</style>
+
+
+<style id="index-seat-logout-header-style-v111">
+/* 席位 A / B 登出按鈕改成原右上角登出的相同規格 */
+.seat-card .seat-logout-btn{
+  box-sizing:border-box!important;
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  height:44px!important;
+  min-height:44px!important;
+  max-height:44px!important;
+  padding:0!important;
+  margin:0!important;
+  border-radius:999px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 44px!important;
+  color:var(--danger)!important;
+  border:1px solid color-mix(in srgb,var(--danger) 42%,var(--line))!important;
+  background:color-mix(in srgb,var(--danger) 7%,var(--panel3))!important;
+  line-height:1!important;
+}
+.seat-card .seat-logout-btn svg{
+  width:20px!important;
+  height:20px!important;
+  display:block!important;
+  stroke:currentColor!important;
+}
+.seat-card .seat-logout-btn:hover{
+  transform:translateY(-1px)!important;
+  border-color:color-mix(in srgb,var(--danger) 62%,var(--line))!important;
+}
+</style>
+
+
+<style id="index-attendance-cache-v112">
+.attendance-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
+.attendance-title-row h2{margin:0}
+#attendanceSeatBadge{flex:0 0 auto}
+</style>
+
+
+<style id="index-home-grid-2x2-v114">
+/* 首頁四張資訊卡固定 2×2
+   左上：今日值班人員   右上：最近請假申請
+   左下：今日未完成事項   右下：最近補卡申請 */
+.home-info-grid{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  grid-template-areas:
+    "duty leave"
+    "todo request"!important;
+  gap:14px!important;
+  align-items:stretch!important;
+}
+.home-info-grid .dash-duty{
+  grid-area:duty!important;
+}
+.home-info-grid .dash-leave{
+  grid-area:leave!important;
+}
+.home-info-grid .dash-todo{
+  grid-area:todo!important;
+}
+.home-info-grid .dash-request{
+  grid-area:request!important;
+}
+.home-info-grid .dash-duty,
+.home-info-grid .dash-leave,
+.home-info-grid .dash-todo,
+.home-info-grid .dash-request{
+  grid-column:auto!important;
+  min-width:0!important;
+  min-height:154px!important;
+}
+.home-info-grid .row{
+  min-height:44px!important;
+}
+.home-info-grid .empty{
+  min-height:72px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  color:var(--muted)!important;
+  text-align:center!important;
+}
+#view-home>.dual-seat-section{
+  margin-bottom:16px!important;
+}
+
+/* 小螢幕才改單欄，桌面維持真正 2×2 */
+@media(max-width:720px){
+  .home-info-grid{
+    grid-template-columns:1fr!important;
+    grid-template-areas:
+      "duty"
+      "leave"
+      "todo"
+      "request"!important;
+  }
+}
+</style>
+
+
+<style id="index-home-kept-adjustments-v116">
+/* V11.4 正常尺寸保留，只套用指定調整 */
+
+/* 操作身分 + 打卡提醒同一排 */
+.home-control-strip{
+  display:grid;
+  grid-template-columns:minmax(0,1.55fr) minmax(360px,1fr);
+  align-items:center;
+  gap:10px;
+  margin-bottom:12px;
+}
+.home-reminder{
+  min-width:0;
+  min-height:42px;
+  padding:7px 12px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line));
+  border-radius:999px;
+  background:color-mix(in srgb,var(--accent) 5%,var(--panel));
+}
+.home-reminder-icon{
+  width:26px;
+  min-width:26px;
+  height:26px;
+  min-height:26px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--accent) 14%,var(--panel));
+  color:var(--accent);
+  font-size:12px;
+  font-weight:900;
+}
+.home-reminder-text{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  overflow:hidden;
+}
+.home-reminder-text b{
+  flex:0 0 auto;
+  color:var(--accent);
+  font-size:12px;
+}
+.home-reminder-text span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:12px;
+}
+.merged-active-seat-bar{
+  margin:0!important;
+}
+
+/* 未登入席位：桌面學號 / PIN / 登入同一排 */
+@media (min-width:721px){
+  .seat-login-grid{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 170px!important;
+    align-items:end!important;
+  }
+  .seat-login-submit{
+    grid-column:auto!important;
+    width:170px!important;
+  }
+}
+
+@media (max-width:980px){
+  .home-control-strip{
+    grid-template-columns:1fr;
+  }
+  .home-reminder{
+    border-radius:16px;
+  }
+}
+
+@media (max-width:720px){
+  .home-control-strip{
+    display:block;
+  }
+  .home-reminder{
+    margin-bottom:10px;
+    border-radius:16px;
+  }
+}
+</style>
+
+
+<style id="index-seat-status-align-v117">
+/* 雙值班席位右側狀態膠囊：
+   對齊左側「席位／姓名／說明」整組內容的垂直中心 */
+.seat-card-head{
+  position:relative!important;
+  display:block!important;
+  padding-right:92px!important;
+}
+
+.seat-card-head > div:first-child{
+  min-width:0!important;
+}
+
+.seat-card-head > .badge{
+  position:absolute!important;
+  right:0!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+
+  box-sizing:border-box!important;
+  height:28px!important;
+  min-height:28px!important;
+  max-height:28px!important;
+
+  margin:0!important;
+  padding:0 10px!important;
+
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+
+  line-height:1!important;
+  white-space:nowrap!important;
+  border-radius:999px!important;
+}
+
+/* 窄螢幕仍維持同樣對齊，不讓 badge 壓到文字 */
+@media(max-width:620px){
+  .seat-card-head{
+    padding-right:84px!important;
+  }
+  .seat-card-head > .badge{
+    height:27px!important;
+    min-height:27px!important;
+    max-height:27px!important;
+    padding:0 9px!important;
+  }
+}
+</style>
+
+
+
+
+
+
+
+
+<style id="index-seat-login-size-sync-v120">
+/* =========================================================
+   雙值班席位 A / B 登入列尺寸完全同步
+   三欄固定為相同比例，不讓第三欄依內容產生視覺差異。
+   ========================================================= */
+@media (min-width:721px){
+  .dual-seat-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+
+  .seat-card{
+    min-width:0!important;
+    width:100%!important;
+    box-sizing:border-box!important;
+  }
+
+  .seat-login-grid{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:10px!important;
+    align-items:start!important;
+    width:100%!important;
+    box-sizing:border-box!important;
+  }
+
+  .seat-login-grid > label,
+  .seat-login-grid > .seat-login-action{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    margin:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:6px!important;
+    box-sizing:border-box!important;
+  }
+
+  .seat-login-action-label{
+    visibility:hidden!important;
+    margin:0!important;
+    padding:0!important;
+    font-size:12px!important;
+    font-weight:800!important;
+    line-height:normal!important;
+    white-space:nowrap!important;
+    user-select:none!important;
+    pointer-events:none!important;
+  }
+
+  .seat-login-grid input,
+  .seat-login-submit{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+
+    height:42px!important;
+    min-height:42px!important;
+    max-height:42px!important;
+
+    margin:0!important;
+    padding:0 14px!important;
+
+    box-sizing:border-box!important;
+    border-radius:999px!important;
+  }
+
+  .seat-login-submit{
+    grid-column:auto!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+    flex:none!important;
+  }
+}
+
+@media (max-width:720px){
+  .seat-login-action{
+    display:block!important;
+  }
+  .seat-login-action-label{
+    display:none!important;
+  }
+  .seat-login-submit{
+    width:100%!important;
+  }
+}
+</style>
+
+
+<style id="index-unfinished-report-v121">
+.unfinished-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.unfinished-card-head h2{margin:0!important}
+.unfinished-report-btn{height:30px!important;min-height:30px!important;padding:0 11px!important;border-radius:999px!important;font-size:11px!important}
+#unfinishedSubmitDialog{width:min(500px,calc(100vw - 28px));max-width:500px;padding:20px;border:1px solid var(--line);border-radius:22px;background:var(--panel);color:var(--text);box-shadow:0 20px 55px rgba(0,0,0,.18)}
+#unfinishedSubmitDialog::backdrop{background:rgba(20,18,13,.42);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+#unfinishedSubmitDialog>label{display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:12px;font-weight:800}
+#unfinishedSubmitDialog .unfinished-review-note{margin-top:10px;padding:9px 12px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--accent) 5%,var(--panel2));color:var(--muted);font-size:11px;line-height:1.5}
+#unfinishedSubmitDialog .dialog-actions{margin-top:14px;display:flex;justify-content:flex-end;gap:8px}
+#unfinishedSubmitDialog .dialog-actions .btn{height:30px!important;min-height:30px!important;padding:0 12px!important;border-radius:999px!important}
+.unfinished-my-history{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.unfinished-my-history h3{margin:0 0 8px;font-size:13px}
+.unfinished-history-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.unfinished-history-row:last-child{border-bottom:0}
+.unfinished-history-row>div{min-width:0}
+.unfinished-history-row b{display:block;font-size:12px}
+.unfinished-history-row span{font-size:10px;color:var(--muted)}
+</style>
+
+
+<style id="index-unfinished-dialog-actions-v122">
+#unfinishedSubmitDialog .dialog-actions{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:10px!important;
+  align-items:center!important;
+  width:100%!important;
+  margin-top:14px!important;
+}
+#unfinishedSubmitDialog .dialog-actions .btn{
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:40px!important;
+  min-height:40px!important;
+  max-height:40px!important;
+  margin:0!important;
+  padding:0 14px!important;
+  border-radius:999px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+</style>
+
+
+<style id="carbon-theme-v1">
+/* =========================================================
+   Carbon 主題 V1（工讀生打卡系統 V2 全頁共用）
+   ---------------------------------------------------------
+   說明：
+   1. 本區塊放在 head 結尾、所有樣式之後，負責覆寫舊版深色/金黃配色。
+   2. 選擇器上的 § 會由建置腳本替換成 :not(#_cb#_cb)
+      這是「提高權重」用的技巧，權重等同兩個 id，
+      可穩定蓋過舊樣式中大量的 !important 規則，且不會誤選任何元素。
+   3. 配色 token 對照（淺色模式）：
+      --navy        #1e3a8a  頂欄、主要按鈕、選取狀態、勾選框
+      --navy-hover  #172b66  主要按鈕滑過
+      --navy-active #0f1d45  主要按鈕按下
+      --layer       #ffffff  卡片、側欄底色
+      --layer-hover #e8e8e8  側欄／列表滑過
+      --layer-active#e0e0e0  側欄選取、表頭
+      --amber       #d97706  數字徽章
+      --navy-soft   #e8eefc  「今天」等標籤底色（深藍字）
+      --bg #f4f4f4／--text #161616／--muted #6f6f6f／--placeholder #a8a8a8
+   ========================================================= */
+
+/* ---------- 1. 新增 Carbon token（淺色） ---------- */
+html:not(#_cb#_cb),
+html[data-theme="light"]:not(#_cb#_cb){
+  --navy:#1e3a8a;
+  --navy-hover:#172b66;
+  --navy-active:#0f1d45;
+  --navy-soft:#e8eefc;
+  --navy-soft-text:#1e3a8a;
+  --on-navy:#ffffff;
+  --on-navy-muted:#c7d2f0;
+  --on-navy-hover:rgba(255,255,255,.12);
+  --on-navy-active:rgba(255,255,255,.2);
+  --layer:#ffffff;
+  --layer-hover:#e8e8e8;
+  --layer-active:#e0e0e0;
+  --field:#f4f4f4;
+  --field-line:#8d8d8d;
+  --btn:#e0e0e0;
+  --btn-hover:#d1d1d1;
+  --btn-active:#c6c6c6;
+  --placeholder:#a8a8a8;
+  --amber:#d97706;
+  --amber-soft:#fdf1e1;
+  --amber-text:#a35200;
+  --danger-soft:#fff1f1;
+  --danger-soft-hover:#ffd7d9;
+  --ok-soft:#defbe6;
+  --overlay:rgba(22,22,22,.5);
+  --ui-font:"Microsoft JhengHei UI","Microsoft JhengHei","微軟正黑體","Noto Sans TC","Segoe UI",Arial,sans-serif;
+}
+
+/* ---------- 1b. 深色模式（Carbon g100），保留原本的切換功能 ---------- */
+html[data-theme="dark"]:not(#_cb#_cb){
+  --navy:#1e3a8a;
+  --navy-hover:#2a4aa3;
+  --navy-active:#0f1d45;
+  --navy-soft:#1c2a4f;
+  --navy-soft-text:#a6c8ff;
+  --on-navy:#ffffff;
+  --on-navy-muted:#c7d2f0;
+  --on-navy-hover:rgba(255,255,255,.12);
+  --on-navy-active:rgba(255,255,255,.2);
+  --layer:#262626;
+  --layer-hover:#333333;
+  --layer-active:#393939;
+  --field:#393939;
+  --field-line:#8d8d8d;
+  --btn:#393939;
+  --btn-hover:#4c4c4c;
+  --btn-active:#525252;
+  --placeholder:#6f6f6f;
+  --amber:#d97706;
+  --amber-soft:#3d2a10;
+  --amber-text:#f5b56b;
+  --danger-soft:#3a1214;
+  --danger-soft-hover:#52171b;
+  --ok-soft:#0f2e1a;
+  --overlay:rgba(0,0,0,.6);
+}
+
+/* ---------- 2. 全域：方角、無陰影、無外框漸層 ---------- */
+html body *:not(#_cb#_cb),
+html body *:not(#_cb#_cb)::before,
+html body *:not(#_cb#_cb)::after{
+  border-radius:0!important;
+  box-shadow:none!important;
+  text-shadow:none!important;
+}
+/* 徽章、膠囊、標籤一律方角（不再保留膠囊造型），規格見第 7 節 */
+/* 例外：圓點、轉圈 Loading、頭像維持正圓 */
+html body :is([class*="dot"],[class*="spinner"],[class*="avatar"],.hero-badge):not(#_cb#_cb){
+  border-radius:50%!important;
+}
+html:not(#_cb#_cb){background:var(--bg)!important}
+html body:not(#_cb#_cb){
+  background:var(--bg)!important;
+  background-image:none!important;
+  color:var(--text)!important;
+  font-family:var(--ui-font)!important;
+}
+html body :is(input,select,textarea):not(#_cb#_cb)::placeholder{color:var(--placeholder)!important;opacity:1!important}
+html body :is(.muted,small):not(#_cb#_cb){color:var(--muted)}
+
+/* ---------- 3. 卡片與面板：白色 layer、不加外框 ---------- */
+html body :is(.card,.stat,.summary-card,.hero,.seat-card,.day-card,.login-card,.admin-login-card,.terminal-login-card,.loading-card,.auth-loading-card,.changelog-body,.function-bar):not(#_cb#_cb){
+  background:var(--layer)!important;
+  background-image:none!important;
+  border:0!important;
+}
+/* 統計數字卡：左側深藍線 */
+html body :is(.metric,.stat):not(#_cb#_cb){border-left:3px solid var(--navy)!important}
+html body :is(.metric b,.stat b):not(#_cb#_cb){color:var(--navy-soft-text)!important}
+/* 被選取的卡片／席位：深藍 2px 內框 */
+html body :is(.day-card.active,.seat-card.active):not(#_cb#_cb){box-shadow:inset 0 0 0 2px var(--navy)!important}
+
+/* ---------- 4. 按鈕 ---------- */
+html body :is(.btn,.icon-btn,.icon,.picker-nav,.dialog-x):not(#_cb#_cb){
+  background:var(--btn)!important;
+  background-image:none!important;
+  color:var(--text)!important;
+  border:0!important;
+  transform:none!important;
+  transition:background-color .11s ease!important;
+}
+html body :is(.btn,.icon-btn,.icon,.picker-nav,.dialog-x):not(#_cb#_cb):hover{background:var(--btn-hover)!important;transform:none!important}
+html body :is(.btn,.icon-btn,.icon,.picker-nav,.dialog-x):not(#_cb#_cb):active{background:var(--btn-active)!important}
+/* 主要按鈕：深藍 → 滑過 #172b66 → 按下 #0f1d45 */
+html body :is(.primary,.btn.primary):not(#_cb#_cb){
+  background:var(--navy)!important;
+  background-image:none!important;
+  color:var(--on-navy)!important;
+  border:0!important;
+}
+html body :is(.primary,.btn.primary):not(#_cb#_cb):hover{background:var(--navy-hover)!important}
+html body :is(.primary,.btn.primary):not(#_cb#_cb):active{background:var(--navy-active)!important}
+/* 危險按鈕：淡紅底紅字 */
+html body :is(.danger,.btn.danger):not(#_cb#_cb){
+  background:var(--danger-soft)!important;
+  color:var(--danger)!important;
+  border:0!important;
+}
+html body :is(.danger,.btn.danger):not(#_cb#_cb):hover{background:var(--danger-soft-hover)!important}
+/* 停用狀態 */
+html body :is(button,.btn):not(#_cb#_cb):disabled{background:var(--layer-active)!important;color:var(--placeholder)!important;cursor:not-allowed!important}
+/* 鍵盤焦點：Carbon 2px 深藍框 */
+html body :is(button,a,input,select,textarea,[tabindex]):not(#_cb#_cb):focus-visible{outline:2px solid var(--navy)!important;outline-offset:-2px!important}
+
+/* ---------- 5. 輸入欄位：灰底 + 底線 ---------- */
+html body :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),select,textarea,.select-trigger,.date-trigger,.date-display-btn):not(#_cb#_cb){
+  background:var(--field)!important;
+  background-color:var(--field)!important;
+  color:var(--text)!important;
+  border:0!important;
+  border-bottom:1px solid var(--field-line)!important;
+}
+html body :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea,.select-trigger,.date-trigger,.date-display-btn):not(#_cb#_cb):hover{background-color:var(--layer-hover)!important}
+html body :is(input,select,textarea):not(#_cb#_cb):focus{outline:2px solid var(--navy)!important;outline-offset:-2px!important;border-bottom-color:transparent!important}
+html body select option:not(#_cb#_cb){background:var(--layer)!important;color:var(--text)!important}
+/* 勾選框、單選鈕：深藍 */
+html body :is(input[type="checkbox"],input[type="radio"],input[type="range"]):not(#_cb#_cb){accent-color:var(--navy)!important}
+/* 分段選擇（請假類型等）：選取時深藍底白字 */
+html body .segmented span:not(#_cb#_cb){background:var(--field)!important;border:0!important;color:var(--text)!important}
+html body .segmented input:checked+span:not(#_cb#_cb){background:var(--navy)!important;color:var(--on-navy)!important}
+
+/* ---------- 6. 表格：表頭 #e0e0e0 ---------- */
+html body th:not(#_cb#_cb){
+  background:var(--layer-active)!important;
+  color:var(--text)!important;
+  font-weight:600!important;
+  border-bottom:0!important;
+}
+html body td:not(#_cb#_cb){border-bottom:1px solid var(--layer-active)!important}
+html body tbody tr:not(#_cb#_cb):hover td{background:var(--layer-hover)}
+
+/* ---------- 7. 徽章／標籤 ---------- */
+/* 一般標籤（例如「今天」）：淡藍底深藍字 */
+html body :is(.badge,.version-pill,.account-state-chip,.todo-done-badge):not(#_cb#_cb){
+  background:var(--navy-soft)!important;
+  color:var(--navy-soft-text)!important;
+  border:0!important;
+}
+/* Carbon 方角標籤規格：高 24px、左右 8px、12px 字、不加外框 */
+html body :is(.badge,.version-pill,[class*="chip"],[class*="pill"]):not(button):not(#_cb#_cb){
+  display:inline-flex!important;
+  align-items:center!important;
+  min-height:24px!important;
+  height:auto!important;
+  padding:2px 8px!important;
+  border:0!important;
+  font-size:12px!important;
+  font-weight:500!important;
+  line-height:1.4!important;
+  letter-spacing:.16px!important;
+  white-space:nowrap!important;
+}
+html body .version-pill:not(#_cb#_cb){white-space:normal!important}
+/* 做成標籤樣子的按鈕（如「加入黑名單」）：改為 Carbon 小型按鈕，方角、高 32px */
+html body button:is(.badge,[class*="chip"],[class*="pill"]):not(#_cb#_cb){
+  display:inline-flex!important;
+  align-items:center!important;
+  height:32px!important;
+  min-height:32px!important;
+  padding:0 12px!important;
+  border:0!important;
+  font-size:13px!important;
+  font-weight:500!important;
+  cursor:pointer!important;
+  background:var(--btn)!important;
+  color:var(--text)!important;
+}
+html body button:is(.badge,[class*="chip"],[class*="pill"]):not(#_cb#_cb):hover{background:var(--btn-hover)!important}
+html body button:is(.badge,[class*="chip"],[class*="pill"]):is(.danger,.bad):not(#_cb#_cb){background:var(--danger-soft)!important;color:var(--danger)!important}
+html body button:is(.badge,[class*="chip"],[class*="pill"]):is(.danger,.bad):not(#_cb#_cb):hover{background:var(--danger-soft-hover)!important}
+html body .badge.warn:not(#_cb#_cb){background:var(--amber-soft)!important;color:var(--amber-text)!important}
+html body .badge.upcoming:not(#_cb#_cb){background:var(--amber-soft)!important;color:var(--amber-text)!important}
+html body :is(.badge.bad,.badge.late):not(#_cb#_cb){background:var(--danger-soft)!important;color:var(--danger)!important}
+html body :is(.badge.ok,.badge.good):not(#_cb#_cb){background:var(--ok-soft)!important;color:var(--ok,#24a148)!important}
+/* 數字徽章（待審核件數、帳號數、時段人數）：琥珀橘實心 */
+html body :is(.slot-count-badge,.badge[id$="Count"]):not(#_cb#_cb){background:var(--amber)!important;color:#ffffff!important}
+html body .version-pill.current:not(#_cb#_cb){background:var(--navy)!important;color:var(--on-navy)!important}
+html body .changelog-dot:not(#_cb#_cb){background:var(--navy)!important;border-color:var(--navy)!important}
+
+/* ---------- 8. 提示框：淡藍底 + 左側深藍線（Carbon inline notification） ---------- */
+html body :is(.hint,.notice,.home-reminder):not(#_cb#_cb){
+  background:var(--navy-soft)!important;
+  border:0!important;
+  border-left:3px solid var(--navy)!important;
+  color:var(--text)!important;
+}
+html body :is(.notice-icon,.home-reminder-icon):not(#_cb#_cb){background:var(--navy)!important;color:var(--on-navy)!important}
+
+/* ---------- 9. 日期選擇器 ---------- */
+html body .picker-day:not(#_cb#_cb){border:0!important}
+html body .picker-day:not(#_cb#_cb):hover{background:var(--layer-hover)!important}
+html body .picker-day.today:not(#_cb#_cb){background:var(--navy-soft)!important;color:var(--navy-soft-text)!important;font-weight:700!important}
+html body .picker-day.selected:not(#_cb#_cb){background:var(--navy)!important;color:var(--on-navy)!important;font-weight:700!important}
+/* 月曆格（本月出勤） */
+html body .day:not(#_cb#_cb){background:var(--layer)!important;border:0!important}
+html body .day.today:not(#_cb#_cb){box-shadow:inset 0 0 0 2px var(--navy)!important}
+
+/* ---------- 10. 對話框與遮罩 ---------- */
+html body dialog:not(#_cb#_cb){
+  background:var(--layer)!important;
+  color:var(--text)!important;
+  border:0!important;
+}
+html body dialog:not(#_cb#_cb)::backdrop{
+  background:var(--overlay)!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+/* 登入對話框本身透明，只顯示裡面的卡片 */
+html body :is(#loginBox.terminal-login-dialog,#adminLogin.terminal-login-dialog):not(#_cb#_cb){background:transparent!important}
+html body :is(#loginBox.terminal-login-dialog,#adminLogin.terminal-login-dialog):not(#_cb#_cb)::backdrop{background:var(--bg)!important}
+html body #loginScreen.login-screen:not(#_cb#_cb),
+html body .login-screen:not(#_cb#_cb){background:var(--bg)!important;background-image:none!important}
+/* 登入卡片頂端加深藍色條，呼應頂欄 */
+html body .terminal-login-card:not(#_cb#_cb){border-top:4px solid var(--navy)!important}
+html body :is(.terminal-login-brand .sys,.auth-loading-brand,.brand::before,.head .sys):not(#_cb#_cb){color:var(--navy-soft-text)!important}
+html body .auth-loading-overlay:not(#_cb#_cb){background:var(--overlay)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html body :is(.auth-loading-spinner,.loading-spinner):not(#_cb#_cb){border-color:var(--layer-active)!important;border-top-color:var(--navy)!important}
+/* Toast 訊息：Carbon 深灰底 */
+html body .toast:not(#_cb#_cb){background:#161616!important;color:#f4f4f4!important;border-left:3px solid var(--navy)!important}
+
+/* ---------- 11. 文字強調色統一成深藍 ---------- */
+html body :is(.seat-card-label,.admin-identity b):not(#_cb#_cb){color:var(--navy-soft-text)!important}
+
+/* ---------- 12. 卡片內的小標（ALLOW LIST 等）與新增帳號區 ---------- */
+html body .card .sys:not(#_cb#_cb){color:var(--navy-soft-text)!important;font-size:10px!important;font-weight:700!important;letter-spacing:1.4px!important}
+html body .worker-create-grid:not(#_cb#_cb){border:0!important;background:transparent!important;padding:0!important}
+/* 帳號清單每一列：拿掉外框，改用灰底區分 */
+html body .worker-account:not(#_cb#_cb){border:0!important;background:var(--bg)!important}
+
+/* 深色模式：舊有變數對應 Carbon g100 */
+html[data-theme="dark"]:not(#_cb#_cb){--bg:#161616;--panel:#262626;--panel2:#262626;--panel-2:#262626;--panel3:#393939;--panel-3:#393939;--text:#f4f4f4;--muted:#c6c6c6;--line:#393939;--accent:#a6c8ff;--accent2:#78a9ff;--accent-2:#78a9ff;--blue:#a6c8ff;--danger:#ff8389;--warn:#f5b56b;--ok:#42be65;--shadow:none}
+
+/* ---------- Index（值班電腦端）：深藍頂欄 + 白色側欄（與後台相同外框） ----------
+   原始結構不變，只靠 CSS 排版：
+   <header class="top">系統名稱｜操作鈕</header>
+   <main class="wrap">
+     <nav class="function-bar">功能按鈕</nav>   ← 放到左側欄
+     其他內容                                  ← 放到右側內容欄
+   </main>
+   ------------------------------------------------------------------------- */
+
+/* 頂欄：深藍、高 56px、左右滿版 */
+html body header.top:not(#_cb#_cb){
+  position:sticky!important;
+  top:0!important;
+  z-index:40!important;
+  background:var(--navy)!important;
+  color:var(--on-navy)!important;
+  border:0!important;
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+html body .top-inner:not(#_cb#_cb){
+  max-width:none!important;
+  width:100%!important;
+  height:56px!important;
+  padding:0 8px 0 24px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+}
+/* 系統名稱 + 登入狀態小標（#hello 由程式更新文字） */
+html body header.top .brand:not(#_cb#_cb){display:flex!important;align-items:center!important;min-width:0!important}
+html body header.top .brand:not(#_cb#_cb)::before{content:none!important;display:none!important}
+html body header.top .brand h1:not(#_cb#_cb){margin:0!important;font-size:16px!important;font-weight:700!important;letter-spacing:.3px!important;white-space:nowrap!important;color:var(--on-navy)!important}
+html body header.top .brand p:not(#_cb#_cb){
+  margin:0 0 0 12px!important;
+  padding-left:12px!important;
+  border-left:1px solid rgba(255,255,255,.28)!important;
+  font-size:13px!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  color:var(--on-navy-muted)!important;
+}
+html body header.top .top-actions:not(#_cb#_cb){display:flex!important;align-items:center!important;gap:4px!important}
+html body header.top .top-actions :is(.btn,.icon-btn):not(#_cb#_cb){background:transparent!important;color:var(--on-navy)!important}
+html body header.top .top-actions :is(.btn,.icon-btn):not(#_cb#_cb):hover{background:var(--navy-hover)!important}
+html body header.top .top-actions :is(.btn,.icon-btn):not(#_cb#_cb):active{background:var(--navy-active)!important}
+
+/* 內容區格線：左 240px 側欄、右內容 */
+html body .wrap:not(#_cb#_cb){
+  display:grid!important;
+  grid-template-columns:240px minmax(0,1fr)!important;
+  align-items:start!important;
+  max-width:none!important;
+  width:100%!important;
+  margin:0!important;
+  padding:24px 0 24px!important;
+}
+html body .wrap > *:not(#_cb#_cb){grid-column:2!important;margin-left:24px!important;margin-right:24px!important;min-width:0!important}
+
+/* 側欄：白底、滑過 #e8e8e8、選取 #e0e0e0 + 左側深藍線 */
+html body .function-bar:not(#_cb#_cb){
+  grid-column:1!important;
+  grid-row:1 / span 50!important;
+  position:sticky!important;
+  top:56px!important;
+  align-self:start!important;
+  display:flex!important;
+  flex-direction:column!important;
+  gap:0!important;
+  height:calc(100vh - 56px)!important;
+  margin:-24px 0 0!important;
+  padding:8px 0!important;
+  overflow-y:auto!important;
+  background:var(--layer)!important;
+  border:0!important;
+}
+html body .function-bar button:not(#_cb#_cb){
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  width:100%!important;
+  min-height:44px!important;
+  padding:0 24px!important;
+  font-size:14px!important;
+  font-weight:500!important;
+  text-align:left!important;
+  color:var(--muted)!important;
+  background:transparent!important;
+  border:0!important;
+}
+html body .function-bar button:not(#_cb#_cb):hover{background:var(--layer-hover)!important;color:var(--text)!important}
+html body .function-bar button.active:not(#_cb#_cb){
+  background:var(--layer-active)!important;
+  color:var(--text)!important;
+  font-weight:700!important;
+  box-shadow:inset 3px 0 0 var(--navy)!important;
+}
+
+/* 席位區塊與身分列：拿掉外框，改用白色 layer 區分 */
+html body :is(.dual-seat-section,.active-seat-bar,.active-seat-summary,.home-control-strip > *):not(#_cb#_cb){border:0!important}
+html body :is(.dual-seat-section,.active-seat-bar):not(#_cb#_cb){background:var(--layer)!important}
+html body .seat-card:not(#_cb#_cb){background:var(--bg)!important}
+html body .active-seat-summary:not(#_cb#_cb){background:var(--navy-soft)!important;color:var(--navy-soft-text)!important}
+
+/* 視窗很窄時（< 900px）：側欄改成頂欄下方的橫向分頁 */
+@media(max-width:900px){
+  html body .wrap:not(#_cb#_cb){display:block!important;padding-top:0!important}
+  html body .wrap > *:not(#_cb#_cb){margin-left:16px!important;margin-right:16px!important}
+  html body .function-bar:not(#_cb#_cb){position:sticky!important;z-index:30!important;height:auto!important;flex-direction:row!important;overflow-x:auto!important;margin:0 0 16px!important;padding:0!important}
+  html body .function-bar button:not(#_cb#_cb){width:auto!important;flex:0 0 auto!important;white-space:nowrap!important}
+  html body .function-bar button.active:not(#_cb#_cb){box-shadow:inset 0 -3px 0 var(--navy)!important}
+  html body header.top .brand p:not(#_cb#_cb){display:none!important}
+}
+
+</style>
+
+<style id="lucide-icons-v1">
+/* Lucide 圖示：統一線寬與尺寸（各元件可再個別調整） */
+svg.lucide{display:block;flex:0 0 auto;stroke:currentColor;fill:none}
+.nav-ico svg.lucide{width:20px;height:20px}
+.function-nav-icon svg.lucide{width:18px;height:18px}
+.summary-icon svg.lucide{width:18px;height:18px}
+.home-reminder-icon svg.lucide{width:16px;height:16px}
+.function-nav-icon,.summary-icon,.home-reminder-icon,.nav-ico{display:inline-flex!important;align-items:center!important;justify-content:center!important;line-height:1!important}
+</style>
+
+<style id="cancel-request-v1">
+/* V9.10：申請紀錄右側的「取消申請」按鈕與狀態標籤並排 */
+.request-side{display:flex;align-items:center;gap:8px;flex-shrink:0}
+html body .cancel-request-btn:not(#_cb#_cb){height:28px!important;min-height:28px!important;padding:0 10px!important;font-size:12px!important;background:var(--danger-soft)!important;color:var(--danger)!important;border:0!important}
+html body .cancel-request-btn:not(#_cb#_cb):hover{background:var(--danger-soft-hover)!important}
+</style>
+
+<style id="v10-front">
+/* V10：未下班提醒、手機打卡按鈕（Carbon 方角） */
+.v10-open-warn{display:grid;gap:3px;margin-top:10px;padding:9px 11px;border-left:3px solid #d97706;background:#fff4e5;color:#161616;font-size:12.5px;border-radius:0!important;text-align:left}
+.v10-open-warn b{color:#b45309}
+.v10-punch-box{margin-top:12px;display:grid;gap:6px}
+.v10-punch-box .btn{width:100%;min-height:44px}
+.v10-punch-box small{color:var(--muted,#6f6f6f);font-size:12px}
+.att-hours{font-size:12px;color:#1e3a8a;font-weight:700}
+</style>
+</head><body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1>管理學院值班中控平台</h1>
+      <p id="hello">請以學號與個人 PIN 登入</p>
+    </div>
+    <div class="top-actions">
+      <button class="btn icon-theme index-head-icon" id="themeBtn" onclick="toggleTheme()" title="切換淺色模式" aria-label="切換淺色模式"></button>
+      <button class="btn refresh-icon-btn index-head-icon" onclick="load()" title="重新整理" aria-label="重新整理">
+        <svg class="lucide lucide-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+<nav class="function-bar">
+  <button class="active" data-view="home" onclick="showView('home',this)"><span>今日打卡</span>
+  </button>
+  <button data-view="attendance" onclick="showView('attendance',this)"><span>本月出勤</span>
+  </button>
+  <button data-view="leave" onclick="showView('leave',this)"><span>請假申請</span>
+  </button>
+  <button data-view="makeup" onclick="showView('makeup',this)"><span>補打卡</span>
+  </button>
+</nav>
+<div class="home-control-strip">
+  <div class="home-reminder">
+    <span class="home-reminder-icon"><svg class="lucide lucide-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+    <div class="home-reminder-text">
+      <b>打卡小提醒</b>
+      <span>每天只需上班、下班各打卡一次；計薪區段由系統依排班自動切分。</span>
+    </div>
+  </div>
+  <div class="active-seat-bar merged-active-seat-bar" id="activeSeatBar">
+    <span class="active-seat-bar-label">目前操作身分</span>
+    <div class="active-seat-bar-buttons" id="activeSeatButtons"></div>
+  </div>
+</div>
+
+<section id="view-home" class="view active">
+<section class="dual-seat-section">
+  <div class="dual-seat-heading">
+    <div>
+      <div class="dual-seat-kicker">SHARED DUTY TERMINAL</div>
+      <h2>雙值班席位</h2>
+      <p>兩位工讀生可同時登入，兩席位身分與打卡紀錄互不影響。</p>
+    </div>
+    <div class="active-seat-summary" id="activeSeatSummary">尚未選擇操作身分</div>
+  </div>
+  <div class="dual-seat-grid">
+    <article class="seat-card" id="seatCardA"></article>
+    <article class="seat-card" id="seatCardB"></article>
+  </div>
+</section>
+
+<div class="dashboard-grid dual-dashboard-grid home-info-grid">
+<section class="card dash-duty"><h2>今日值班人員</h2><div id="duties"></div></section>
+<section class="card dash-request"><h2 id="requestsTitle">最近補卡申請</h2><div id="requests"></div></section>
+<section class="card dash-leave"><h2 id="homeLeaveTitle">最近請假申請</h2><div id="homeLeaveRequests"></div></section>
+<section class="card dash-todo">
+  <div class="unfinished-card-head">
+    <h2>今日未完成事項</h2>
+    <button class="btn soft unfinished-report-btn" onclick="openUnfinishedSubmitDialog()">提報未完成事項</button>
+  </div>
+  <div id="todos"></div>
+</section>
+</div>
+</section>
+
+<section id="view-attendance" class="view">
+<div class="card"><div class="attendance-title-row"><h2>我的本月出勤</h2><span class="badge" id="attendanceSeatBadge">—</span></div><div class="tools"><label>查詢年份<select id="attYear" onchange="loadAttendance()"></select></label><label>查詢月份<select id="attMonthNo" onchange="loadAttendance()"></select></label><button class="btn soft" onclick="loadAttendance()">重新查詢</button></div><div class="att-summary"><div class="mini"><b id="aScheduled">—</b><span class="muted">排班日</span></div><div class="mini"><b id="aPunched">—</b><span class="muted">已打卡</span></div><div class="mini"><b id="aMissing">—</b><span class="muted">未打卡</span></div><div class="mini"><b id="aLeave">—</b><span class="muted">已請假</span></div><div class="mini"><b id="aHours">—</b><span class="muted" id="aHoursSub">本月工時</span></div></div><div class="calendar-head"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div><div id="attCalendar" class="calendar"></div></div>
+</section>
+
+<section id="view-leave" class="view">
+<div class="grid"><section class="card"><h2>請假申請</h2>
+<div class="leave-form">
+  <label class="date-field">請假日期<input id="lvDate" type="hidden"><button type="button" class="date-display-btn placeholder" id="lvDateBtn" onclick="openDatePicker('lvDate','lvDateBtn','選擇請假日期')">選擇日期</button></label>
+  <label>假別<select id="lvCategory"><option>事假</option><option>病假</option><option>公假</option><option>喪假</option><option>其他</option></select></label>
+  <label class="full">請假範圍<select id="lvMode" onchange="updateLeaveMode()"><option value="整日">整日請假</option><option value="部分時數">部分時數請假</option></select></label>
+  <label class="leave-partial-field" id="lvStartField" hidden>請假開始時間<input id="lvStart" type="time" step="3600"></label>
+  <label class="leave-partial-field" id="lvEndField" hidden>請假結束時間<input id="lvEnd" type="time" step="3600"></label>
+  <p class="full muted" id="lvTimeHint" hidden>以整小時申請；午休等不計薪時段不列入請假時數。部分請假當天仍可正常打卡。</p>
+  <label class="full">請假原因<textarea id="lvReason" rows="4" placeholder="請簡要說明請假原因"></textarea></label>
+  <div class="full"><button class="btn primary" onclick="sendLeave()">送出請假申請</button></div>
+</div><p class="muted">只能申請今天以後、有排班的日期；送出後由管理員審核。過去的日子請改用補卡或聯絡管理員。</p></section><section class="card"><h2>我的請假紀錄</h2><div id="leaveHistory"></div></section></div>
+</section>
+<section id="view-makeup" class="view">
+<div class="grid">
+<section class="card"><h2>補打卡申請</h2>
+<div class="leave-form">
+<label class="date-field">補卡日期<input id="mDate" type="hidden"><button type="button" class="date-display-btn placeholder" id="mDateBtn" onclick="openDatePicker('mDate','mDateBtn','選擇補卡日期')">選擇日期</button></label>
+<label>補卡類型<select id="mTypePage" onchange="updateMakeupPageType()"><option value="in">補上班卡</option><option value="out">補下班卡</option><option value="both">上下班都補</option></select></label>
+<label id="mInPageWrap">上班時間<select id="mInPage"><option value="">請選擇上班時間</option></select></label>
+<label id="mOutPageWrap" style="display:none">下班時間<select id="mOutPage"><option value="">請選擇下班時間</option></select></label>
+<div id="mTimeSpacer" class="makeup-time-placeholder" aria-hidden="true"></div>
+<label class="full">原因<textarea id="mReasonPage" rows="4" placeholder="請說明忘記打卡原因"></textarea></label>
+<div class="full"><button class="btn primary" onclick="sendMakeupPage()">送出補打卡申請</button></div>
+</div>
+<p class="muted">補卡申請送出後由管理員審核，可在右側查詢完整申請紀錄。</p>
+</section>
+<section class="card"><h2>我的補打卡紀錄</h2><div id="makeupHistory"></div></section>
+</div>
+</section>
+</main>
+
+
+<dialog id="unfinishedSubmitDialog" class="unfinished-submit-dialog">
+  <div class="dialog-head">
+    <div>
+      <h2>提報未完成事項</h2>
+      <div class="muted" id="unfinishedReporterText">—</div>
+    </div>
+    <button class="dialog-x" onclick="closeUnfinishedSubmitDialog()" aria-label="關閉">×</button>
+  </div>
+  <label>未完成事項內容
+    <input id="unfinishedTitle" maxlength="200" placeholder="例如：會議室設備尚未歸位">
+  </label>
+  <label>優先程度
+    <select id="unfinishedPriority"><option>一般</option><option>緊急</option><option>低</option></select>
+  </label>
+  <label>提報說明
+    <textarea id="unfinishedNote" rows="4" maxlength="500" placeholder="補充目前進度、需要下一班注意的狀況；可留白。"></textarea>
+  </label>
+  <div class="unfinished-review-note">送出後會先交由管理員審核，核准後才會分配給下一班、指定工讀生或全體工讀生。</div>
+  <div class="dialog-actions">
+    <button class="btn soft" onclick="closeUnfinishedSubmitDialog()">取消</button>
+    <button class="btn primary" onclick="submitUnfinishedReport()">送出審核</button>
+  </div>
+  <div class="unfinished-my-history">
+    <h3>我的最近提報</h3>
+    <div id="unfinishedSubmissionHistory"><div class="empty">目前沒有提報紀錄</div></div>
+  </div>
+</dialog>
+
+<dialog id="todoCompleteDialog" class="todo-complete-dialog">
+  <div class="dialog-head">
+    <div>
+      <h2>完成未完成事項</h2>
+      <div class="muted" id="todoCompleteTargetText">—</div>
+      <div class="muted todo-complete-actor" id="todoCompleteActorText">—</div>
+    </div>
+    <button class="dialog-x" onclick="closeTodoCompleteDialog()" aria-label="關閉">×</button>
+  </div>
+  <label class="todo-complete-note">
+    完成備註
+    <textarea id="todoCompleteNote" rows="5" maxlength="500" placeholder="如有需要管理員注意的狀況，請在這裡說明；若無可留白。"></textarea>
+  </label>
+  <div class="todo-note-help">此備註會同步顯示在管理後台的未完成事項紀錄。</div>
+  <div class="dialog-actions">
+    <button class="btn soft" onclick="closeTodoCompleteDialog()">取消</button>
+    <button class="btn primary" onclick="confirmTodoComplete()">送出並標記完成</button>
+  </div>
+</dialog>
+
+<dialog id="datePickerDialog" class="calendar-picker">
+<div class="dialog-head"><div><h2 id="datePickerTitle">選擇日期</h2><div class="muted">使用系統日期盤選擇日期</div></div><button class="dialog-x" onclick="datePickerDialog.close()" aria-label="關閉">×</button></div>
+<div class="picker-month-head"><button class="picker-nav" onclick="moveDatePickerMonth(-1)">‹</button><b id="datePickerMonthTitle">—</b><button class="picker-nav" onclick="moveDatePickerMonth(1)">›</button></div>
+<div class="picker-week"><div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div></div>
+<div class="picker-days" id="datePickerDays"></div>
+<div class="picker-footer"><button class="btn soft" onclick="clearPickedDate()">清除日期</button><button class="btn soft" onclick="datePickerDialog.close()">關閉</button></div>
+</dialog>
+<div class="loading-overlay" id="loadingOverlay" aria-live="polite" aria-busy="true">
+  <div class="loading-card">
+    <div class="loading-spinner"></div>
+    <div class="loading-brand">CONTROL SYSTEM</div>
+    <div class="loading-text" id="loadingText">正在同步…</div>
+    <div class="loading-sub">請稍候，系統正在處理資料</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+function safeJsonParse(raw,fallback=null){try{return raw?JSON.parse(raw):fallback}catch(e){return fallback}}
+
+const legacySessionToken=sessionStorage.getItem('workerDutyToken')||'';
+const legacyLocalToken=localStorage.getItem('workerDutyToken')||'';
+const seats={
+  A:{token:sessionStorage.getItem('workerDutyTokenA')||legacySessionToken||legacyLocalToken||'',user:safeJsonParse(sessionStorage.getItem('workerDutyUserA')),state:{}},
+  B:{token:sessionStorage.getItem('workerDutyTokenB')||'',user:safeJsonParse(sessionStorage.getItem('workerDutyUserB')),state:{}}
+};
+if((legacySessionToken||legacyLocalToken)&&!sessionStorage.getItem('workerDutyTokenA'))sessionStorage.setItem('workerDutyTokenA',seats.A.token);
+sessionStorage.removeItem('workerDutyToken');localStorage.removeItem('workerDutyToken');
+let activeSeat=sessionStorage.getItem('workerDutyActiveSeat')||'A';if(!['A','B'].includes(activeSeat))activeSeat='A';
+let token='',state={},attData={rows:[],counts:{}};
+const attendanceCache={A:new Map(),B:new Map()};
+const attendanceCachePending={A:new Set(),B:new Set()};
+const IDLE_LOGOUT_MS=5*60*1000;let idleLogoutTimer=null,lastActivityAt=Date.now();
+function anySeatLoggedIn(){return !!(seats.A.token||seats.B.token)}
+function seatOther(k){return k==='A'?'B':'A'}function seatLabel(k){return '席位 '+k}function loggedSeatKeys(){return ['A','B'].filter(k=>!!seats[k].token)}
+function persistSeat(k){const s=seats[k];if(s.token)sessionStorage.setItem('workerDutyToken'+k,s.token);else sessionStorage.removeItem('workerDutyToken'+k);if(s.user)sessionStorage.setItem('workerDutyUser'+k,JSON.stringify(s.user));else sessionStorage.removeItem('workerDutyUser'+k)}
+function clearSeatSession(k){seats[k].token='';seats[k].user=null;seats[k].state={};if(typeof invalidateAttendanceCache==='function')invalidateAttendanceCache(k);sessionStorage.removeItem('workerDutyToken'+k);sessionStorage.removeItem('workerDutyUser'+k)}
+function resolveActiveSeat(){if(seats[activeSeat]?.token)return activeSeat;activeSeat=loggedSeatKeys()[0]||'A';sessionStorage.setItem('workerDutyActiveSeat',activeSeat);return activeSeat}
+function syncActiveRefs(){resolveActiveSeat();token=seats[activeSeat]?.token||'';state=seats[activeSeat]?.state||{}}
+syncActiveRefs();
+
+let datePickerTarget='',datePickerButton='',datePickerCursor=new Date();
+function fmtDateLocal(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function openDatePicker(targetId,buttonId,title){if(!requireActiveSeat())return;datePickerTarget=targetId;datePickerButton=buttonId;const v=$(targetId).value,m=v&&v.match(/^(\d{4})-(\d{2})-(\d{2})$/);datePickerCursor=m?new Date(Number(m[1]),Number(m[2])-1,1):new Date(new Date().getFullYear(),new Date().getMonth(),1);$('datePickerTitle').textContent=title||'選擇日期';renderDatePicker();if(!datePickerDialog.open)datePickerDialog.showModal()}
+function moveDatePickerMonth(step){datePickerCursor=new Date(datePickerCursor.getFullYear(),datePickerCursor.getMonth()+step,1);renderDatePicker()}
+function renderDatePicker(){const y=datePickerCursor.getFullYear(),m=datePickerCursor.getMonth(),first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),today=fmtDateLocal(new Date()),selected=datePickerTarget?$(datePickerTarget).value:'';$('datePickerMonthTitle').textContent=`${y} 年 ${m+1} 月`;let html='';for(let i=0;i<first;i++)html+='<button class="picker-day blank" disabled></button>';for(let d=1;d<=days;d++){const v=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;html+=`<button class="picker-day ${v===selected?'selected':''} ${v===today?'today':''}" onclick="selectPickedDate('${v}')">${d}</button>`}$('datePickerDays').innerHTML=html}
+function selectPickedDate(v){if(!datePickerTarget)return;$(datePickerTarget).value=v;const b=$(datePickerButton);if(b){b.textContent=v;b.classList.remove('placeholder')}datePickerDialog.close()}
+function clearPickedDate(){if(datePickerTarget)$(datePickerTarget).value='';const b=$(datePickerButton);if(b){b.textContent='選擇日期';b.classList.add('placeholder')}datePickerDialog.close()}
+
+let loadingDepth=0;
+function showLoading(message){loadingDepth++;const overlay=$('loadingOverlay');if($('loadingText'))$('loadingText').textContent=message||'正在同步…';if(overlay)overlay.classList.add('show')}
+function hideLoading(force){loadingDepth=force?0:Math.max(0,loadingDepth-1);const overlay=$('loadingOverlay');if(overlay&&loadingDepth===0)overlay.classList.remove('show')}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function toast(m){$('toast').textContent=m;$('toast').style.display='block';setTimeout(()=>$('toast').style.display='none',3200)}
+function themeSvg(t){return t==='dark'?'<svg class="lucide lucide-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>':'<svg class="lucide lucide-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>'}
+function applyTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem('dutyThemeCarbon',t);const b=$('themeBtn');b.innerHTML=themeSvg(t);b.title=t==='dark'?'切換淺色模式':'切換深色模式';b.setAttribute('aria-label',b.title)}function toggleTheme(){applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}applyTheme(localStorage.getItem('dutyThemeCarbon')||'light');
+
+const WRITE_ACTION_MESSAGES={punch:'正在送出打卡紀錄…',completeTodo:'正在更新未完成事項…',submitUnfinishedItem:'正在送出未完成事項…',submitLeave:'正在送出請假申請…',submitMakeup:'正在送出補打卡申請…',cancelLeave:'正在取消請假申請…',cancelMakeup:'正在取消補打卡申請…',changePassword:'正在更新登入 PIN…'};
+function isWriteAction(fn){return Object.prototype.hasOwnProperty.call(WRITE_ACTION_MESSAGES,fn)}function writeActionMessage(fn){return WRITE_ACTION_MESSAGES[fn]||'正在送出資料…'}
+function requireSeat(k){if(k&&seats[k]?.token)return true;toast('請先登入值班席位');return false}function requireActiveSeat(){syncActiveRefs();return requireSeat(activeSeat)}
+function silentRefreshAfterWrite(fn,seatKey,finish,fail){load(()=>{if(fn==='submitLeave'&&activeSeat===seatKey&&$('view-attendance')?.classList.contains('active'))loadAttendance(finish,fail);else finish&&finish()},fail)}
+function callAsSeat(seatKey,fn,args,done,fail){const s=seats[seatKey];if(!s?.token){toast('請先登入'+seatLabel(seatKey));return}const writing=isWriteAction(fn);if(writing)showLoading(writeActionMessage(fn));let r=google.script.run.withSuccessHandler(x=>{if(!x.ok){if(writing)hideLoading();fail&&fail({message:x.message,logical:true});return toast(x.message)}if(!writing){done&&done(x.data,x.message);return}if(['punch','submitLeave','submitMakeup'].includes(fn))invalidateAttendanceCache(seatKey);if($('loadingText'))$('loadingText').textContent='正在更新畫面…';silentRefreshAfterWrite(fn,seatKey,()=>{done&&done(x.data,x.message);hideLoading()},()=>{done&&done(x.data,x.message);hideLoading();toast('資料已送出，但畫面更新失敗，請按重新整理')})}).withFailureHandler(e=>{if(writing)hideLoading();if(String(e.message).includes('登入')){clearSeatSession(seatKey);if(activeSeat===seatKey)resolveActiveSeat();syncActiveRefs();renderWorkspace()}fail&&fail(e);toast(e.message)});r[fn].apply(r,[s.token].concat(args||[]))}
+function call(fn,args,done,fail){syncActiveRefs();return callAsSeat(activeSeat,fn,args,done,fail)}
+function fillTimes(){['mInPage','mOutPage'].forEach(id=>{let s=$(id);for(let h=8;h<=17;h++)for(let m of [0,30]){if(h===17&&m===30)continue;let v=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'),o=document.createElement('option');o.value=o.textContent=v;s.appendChild(o)}})}fillTimes();
+function updateMakeupPageType(){
+  const t=$('mTypePage').value,sp=$('mTimeSpacer');
+  $('mInPageWrap').style.display=t==='out'?'none':'flex';
+  $('mOutPageWrap').style.display=t==='in'?'none':'flex';
+  if(sp)sp.style.display=t==='both'?'none':'block';
+  if(t==='in')$('mOutPage').value='';
+  if(t==='out')$('mInPage').value='';
+}updateMakeupPageType();
+
+function emptyAttendanceData(month){return{month:month||attendanceMonth(),rows:[],counts:{scheduled:0,punched:0,missing:0,leave:0}}}
+function getAttendanceCache(k,month){return attendanceCache[k]?.get(month)||null}
+function setAttendanceCache(k,month,d){if(!attendanceCache[k])attendanceCache[k]=new Map();attendanceCache[k].set(month,d)}
+function invalidateAttendanceCache(k,month){if(!attendanceCache[k])return;if(month)attendanceCache[k].delete(month);else attendanceCache[k].clear()}
+function showAttendancePlaceholder(month){attData=emptyAttendanceData(month);$('aScheduled').textContent='—';$('aPunched').textContent='—';$('aMissing').textContent='—';$('aLeave').textContent='—';$('attCalendar').innerHTML='<div class="empty" style="grid-column:1/-1">正在同步本月出勤…</div>'}
+function showCachedAttendanceForSeat(k,month){month=month||attendanceMonth();const cached=getAttendanceCache(k,month);if(!cached)return false;attData=cached;renderAttendance();return true}
+function prefetchAttendanceForSeat(k,month,renderIfActive=false){
+  month=month||attendanceMonth();
+  if(!seats[k]?.token||attendanceCachePending[k].has(month))return;
+  attendanceCachePending[k].add(month);
+  google.script.run.withSuccessHandler(x=>{
+    attendanceCachePending[k].delete(month);
+    if(!x||!x.ok)return;
+    setAttendanceCache(k,month,x.data);
+    if(renderIfActive&&activeSeat===k&&$('view-attendance')?.classList.contains('active')&&attendanceMonth()===month){attData=x.data;renderAttendance()}
+  }).withFailureHandler(()=>attendanceCachePending[k].delete(month)).getWorkerMonthAttendance(seats[k].token,month)
+}
+function primeAttendanceCache(month){month=month||attendanceMonth();loggedSeatKeys().forEach(k=>{if(!getAttendanceCache(k,month))prefetchAttendanceForSeat(k,month,activeSeat===k)})}
+function clearPersonalForms(){['lvDate','lvReason','lvStart','lvEnd','mDate','mReasonPage'].forEach(id=>{const el=$(id);if(el)el.value=''});if($('lvDateBtn')){$('lvDateBtn').textContent='選擇日期';$('lvDateBtn').classList.add('placeholder')}if($('lvMode')){$('lvMode').value='整日';updateLeaveMode()}if($('mDateBtn')){$('mDateBtn').textContent='選擇日期';$('mDateBtn').classList.add('placeholder')}if($('mInPage'))$('mInPage').value='';if($('mOutPage'))$('mOutPage').value='';if($('mTypePage')){$('mTypePage').value='in';updateMakeupPageType()}}
+function setActiveSeat(k,fromUser=false){
+  if(!seats[k]?.token){toast(seatLabel(k)+'尚未登入');return}
+  if(activeSeat!==k&&fromUser)clearPersonalForms();
+  activeSeat=k;
+  sessionStorage.setItem('workerDutyActiveSeat',k);
+  syncActiveRefs();
+  renderWorkspace();
+  if($('view-attendance')?.classList.contains('active')){
+    const month=attendanceMonth();
+    if(!showCachedAttendanceForSeat(k,month))showAttendancePlaceholder(month);
+    prefetchAttendanceForSeat(k,month,true);
+  }
+}
+function showView(id,b){
+  if(id!=='home'&&!requireActiveSeat())return;
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  $('view-'+id).classList.add('active');
+  document.querySelectorAll('.function-bar button[data-view]').forEach(x=>x.classList.remove('active'));
+  if(b)b.classList.add('active');
+  renderActiveSeatBar();
+  if(id==='attendance'){
+    const month=attendanceMonth();
+    if(!showCachedAttendanceForSeat(activeSeat,month))showAttendancePlaceholder(month);
+    prefetchAttendanceForSeat(activeSeat,month,true);
+    primeAttendanceCache(month);
+  }
+}
+function loginSeat(k){const sid=$('seat'+k+'StudentId')?.value.trim()||'',pin=$('seat'+k+'Pin')?.value||'',other=seatOther(k);if(!sid||!pin)return toast('請輸入學號與 PIN');if(seats[other].user&&String(seats[other].user.studentId).toLowerCase()===sid.toLowerCase())return toast('此工讀生已登入'+seatLabel(other)+'，不可重複登入兩個席位');showLoading('正在驗證'+seatLabel(k)+'身分…');google.script.run.withSuccessHandler(x=>{if(!x.ok){hideLoading(true);return toast(x.message)}const u=x.data.user||{},newToken=x.data.token||'';if(u.role==='admin'){google.script.run.withFailureHandler(()=>{}).logout(newToken);hideLoading(true);return toast('管理員帳號請使用管理後台登入')}if(seats[other].user&&seats[other].user.studentId===u.studentId){google.script.run.withFailureHandler(()=>{}).logout(newToken);hideLoading(true);return toast(u.name+' 已登入'+seatLabel(other)+'，不可重複登入')}seats[k].token=newToken;seats[k].user=u;seats[k].state={};persistSeat(k);activeSeat=k;sessionStorage.setItem('workerDutyActiveSeat',k);syncActiveRefs();lastActivityAt=Date.now();resetIdleLogout();load(()=>{hideLoading(true);toast(seatLabel(k)+'登入成功｜'+u.name)},e=>{hideLoading(true);toast(e?.message||'登入後資料讀取失敗')})}).withFailureHandler(e=>{hideLoading(true);toast(e.message)}).login(sid,pin)}
+function logoutSeat(k){
+  const oldToken=seats[k]?.token||'';
+  if(!oldToken)return;
+
+  showLoading('正在登出'+seatLabel(k)+'…');
+
+  // 先在本機立即完成登出，不等待 Apps Script 回傳。
+  // 這樣 A / B 席位會立刻變回登入畫面。
+  clearSeatSession(k);
+
+  if(activeSeat===k){
+    activeSeat=loggedSeatKeys()[0]||seatOther(k);
+    sessionStorage.setItem('workerDutyActiveSeat',activeSeat);
+    clearPersonalForms();
+  }
+
+  syncActiveRefs();
+  renderWorkspace();
+
+  // 畫面完成重繪後立即結束 Loading。
+  requestAnimationFrame(()=>requestAnimationFrame(()=>hideLoading(true)));
+
+  // 後端 Session 清除改為背景處理；不再登出後重新 load Dashboard。
+  google.script.run
+    .withSuccessHandler(()=>{})
+    .withFailureHandler(()=>{})
+    .logout(oldToken);
+}
+function doLogout(){const oldTokens=loggedSeatKeys().map(k=>seats[k].token).filter(Boolean);showLoading('正在登出所有值班席位…');['A','B'].forEach(clearSeatSession);activeSeat='A';sessionStorage.setItem('workerDutyActiveSeat','A');syncActiveRefs();clearPersonalForms();clearIdleLogout();renderWorkspace();if(!oldTokens.length){hideLoading(true);return}let left=oldTokens.length;const finish=()=>{left--;if(left<=0)hideLoading(true)};oldTokens.forEach(t=>google.script.run.withSuccessHandler(finish).withFailureHandler(finish).logout(t))}
+function clearIdleLogout(){if(idleLogoutTimer){clearTimeout(idleLogoutTimer);idleLogoutTimer=null}}
+function resetIdleLogout(){if(!anySeatLoggedIn())return;lastActivityAt=Date.now();clearIdleLogout();idleLogoutTimer=setTimeout(()=>autoLogoutForIdle(),IDLE_LOGOUT_MS)}
+function autoLogoutForIdle(){if(!anySeatLoggedIn())return;const oldTokens=loggedSeatKeys().map(k=>seats[k].token).filter(Boolean);['A','B'].forEach(clearSeatSession);activeSeat='A';sessionStorage.setItem('workerDutyActiveSeat','A');syncActiveRefs();clearIdleLogout();clearPersonalForms();renderWorkspace();toast('已閒置 5 分鐘，兩個值班席位皆已自動登出');oldTokens.forEach(t=>google.script.run.withFailureHandler(()=>{}).logout(t))}
+function checkIdleSession(){if(anySeatLoggedIn()&&Date.now()-lastActivityAt>=IDLE_LOGOUT_MS)autoLogoutForIdle();else if(anySeatLoggedIn())resetIdleLogout()}
+['pointerdown','keydown','touchstart'].forEach(evt=>document.addEventListener(evt,()=>{if(anySeatLoggedIn())resetIdleLogout()},{passive:true}));window.addEventListener('focus',checkIdleSession);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkIdleSession()});
+function load(done,fail){const keys=loggedSeatKeys();if(!keys.length){syncActiveRefs();renderWorkspace();done&&done();return}let remaining=keys.length;const results={};const finishOne=()=>{remaining--;if(remaining>0)return;if(window.__autoRefreshGuard&&!window.__autoRefreshGuard()){window.__autoRefreshCancelled=true;done&&done('__cancelled__');return}let firstError=null;keys.forEach(k=>{const r=results[k];if(!r)return;if(r.data){seats[k].state=r.data;seats[k].user=r.data.user||seats[k].user;persistSeat(k)}else if(r.error){if(String(r.error).includes('登入'))clearSeatSession(k);else if(!firstError)firstError=new Error(r.error)}});
+    if(seats.A.token&&seats.B.token&&seats.A.user?.studentId&&seats.A.user.studentId===seats.B.user?.studentId){
+      const keep=activeSeat==='B'?'B':'A',drop=seatOther(keep),duplicateToken=seats[drop].token;
+      clearSeatSession(drop);
+      if(duplicateToken)google.script.run.withFailureHandler(()=>{}).logout(duplicateToken);
+      toast('偵測到同一工讀生重複登入，已保留'+seatLabel(keep)+'並登出'+seatLabel(drop));
+    }
+    resolveActiveSeat();syncActiveRefs();renderWorkspace();if(anySeatLoggedIn())resetIdleLogout();else clearIdleLogout();primeAttendanceCache();if(firstError){fail&&fail(firstError);return}done&&done()};keys.forEach(k=>{google.script.run.withSuccessHandler(x=>{results[k]=x&&x.ok?{data:x.data}:{error:(x&&x.message)||'資料讀取失敗'};finishOne()}).withFailureHandler(e=>{results[k]={error:e?.message||String(e)};finishOne()}).getWorkerDashboard(seats[k].token)})}
+
+function badgeClass(s){return['未打卡','打卡未完成','已退回'].some(x=>s===x||s.startsWith(x+'｜'))?'bad':['尚未打卡','請假審核中','待審核','審核中','未到','即將值班'].some(x=>s===x||s.startsWith(x+'｜'))?'warn':''}
+function seatLogoutSvg(){return `<svg class="lucide lucide-log-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>`}
+function renderSeatCard(k){const el=$('seatCard'+k);if(!el)return;const s=seats[k];el.classList.toggle('active',!!s.token&&activeSeat===k);if(!s.token){el.innerHTML=`<div class="seat-card-head"><div><div class="seat-card-label">${seatLabel(k)}</div><h3>等待登入</h3><div class="seat-card-id">此席位目前沒有登入工讀生</div></div><span class="badge">未登入</span></div><div class="seat-login-grid"><label>學號<input id="seat${k}StudentId" autocomplete="username" placeholder="請輸入學號"></label><label>PIN<input id="seat${k}Pin" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" placeholder="4～8 位數字"></label><div class="seat-login-action"><span class="seat-login-action-label" aria-hidden="true">登入</span><button class="btn primary seat-login-submit" onclick="loginSeat('${k}')">登入${seatLabel(k)}</button></div></div>`;return}const d=s.state||{},u=d.user||s.user||{},ps=d.punchState||{},active=activeSeat===k;el.innerHTML=`<div class="seat-card-head"><div><div class="seat-card-label">${seatLabel(k)}</div><h3>${esc(u.name||'讀取中')}</h3><div class="seat-card-id">${esc(u.studentId||'—')}</div></div><span class="badge ${active?'warn':''}">${active?'目前操作':'已登入'}</span></div><div class="seat-user-body"><div class="seat-punch-state"><b>${esc(ps.label||'讀取今日狀態')}</b><span>${esc(ps.status||'正在同步值班狀態')}</span>${v10OpenWarn(d)}</div><button class="btn primary seat-punch-btn" ${ps.action==='done'?'disabled':''} onclick="punchSeat('${k}')">${esc(ps.label||'上下班打卡')}</button></div><div class="seat-card-actions"><div class="seat-card-actions-left"><button class="btn soft seat-mini-btn" ${active?'disabled':''} onclick="setActiveSeat('${k}',true)">${active?'目前操作身分':'切換為操作身分'}</button></div><button class="btn seat-logout-btn" onclick="logoutSeat('${k}')" title="登出${seatLabel(k)}" aria-label="登出${seatLabel(k)}">${seatLogoutSvg()}</button></div>`}
+function collectSharedTodos(){const map=new Map();['A','B'].forEach(k=>{const d=seats[k].state||{};(d.todos||[]).forEach(t=>{if(!map.has(t.id))map.set(t.id,Object.assign({},t,{eligibleSeats:[]}));const item=map.get(t.id);if(!item.eligibleSeats.includes(k))item.eligibleSeats.push(k);if(t.status==='已完成')Object.assign(item,t)})});return [...map.values()]}
+function todoSeatForId(id){const item=collectSharedTodos().find(x=>x.id===id);if(!item)return '';if(item.eligibleSeats.includes(activeSeat)&&seats[activeSeat].token)return activeSeat;return item.eligibleSeats.find(k=>seats[k].token)||''}
+function renderActiveSeatBar(){const box=$('activeSeatButtons');if(!box)return;const keys=loggedSeatKeys();if(!keys.length){box.innerHTML='<span class="muted">請先登入任一席位</span>';$('activeSeatSummary').textContent='尚未選擇操作身分';return}box.innerHTML=keys.map(k=>{const u=seats[k].user||seats[k].state?.user||{};return `<button class="btn active-seat-choice ${activeSeat===k?'active':''}" onclick="setActiveSeat('${k}',true)">${k}｜${esc(u.name||'讀取中')}</button>`}).join('');const u=seats[activeSeat].user||seats[activeSeat].state?.user||{};$('activeSeatSummary').textContent=`目前操作：${seatLabel(activeSeat)}｜${u.name||'讀取中'}`}
+function renderWorkspace(){renderSeatCard('A');renderSeatCard('B');renderActiveSeatBar();const logged=loggedSeatKeys(),active=seats[activeSeat]?.state||{};state=active;token=seats[activeSeat]?.token||'';if(!logged.length){$('hello').textContent='請在值班席位 A / B 登入工讀生';$('duties').innerHTML='<div class="empty">登入後顯示今日值班資訊</div>';$('todos').innerHTML='<div class="empty">登入後顯示今日未完成事項</div>';$('requests').innerHTML='<div class="empty">登入後顯示補卡申請</div>';$('homeLeaveRequests').innerHTML='<div class="empty">登入後顯示請假申請</div>';$('makeupHistory').innerHTML='<div class="empty">請先登入並選擇操作身分</div>';$('leaveHistory').innerHTML='<div class="empty">請先登入並選擇操作身分</div>';$('requestsTitle').textContent='最近補卡申請';$('homeLeaveTitle').textContent='最近請假申請';return}const names=logged.map(k=>`${k} ${seats[k].user?.name||seats[k].state?.user?.name||'讀取中'}`);$('hello').textContent=names.join('｜');const shared=seats[logged[0]].state||{},duties=shared.duties||[],todos=collectSharedTodos();$('duties').innerHTML=duties.length?duties.map(x=>`<div class="row"><div><b>${esc(x.name)}</b><div class="muted">${esc(x.scheduleText)}</div></div><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></div>`).join(''):'<div class="empty">今日沒有排班</div>';$('todos').innerHTML=todos.length?todos.map(x=>{const seatsText=(x.eligibleSeats||[]).map(k=>`${k} ${seats[k].user?.name||''}`).join('、');return `<div class="row"><div><b>${esc(x.title)}</b><div class="muted">${esc(x.priority)}｜${esc(x.assignee)}${x.due?'｜'+esc(x.due):''}${x.dueTime?' '+esc(x.dueTime):''}${seatsText?'｜可操作：'+esc(seatsText):''}</div></div>${x.status==='已完成'?'<span class="badge todo-done-badge">已完成</span>':`<button class="btn soft todo-complete-btn" onclick="openTodoCompleteDialog('${esc(x.id)}')">標記完成</button>`}</div>`}).join(''):'<div class="empty">目前沒有未完成事項</div>';const u=active.user||seats[activeSeat].user||{};
+if($('attendanceSeatBadge'))$('attendanceSeatBadge').textContent=`${activeSeat}｜${u.name||'工讀生'}`;
+
+$('requestsTitle').textContent=`最近補卡申請｜${u.name||seatLabel(activeSeat)}`;
+$('homeLeaveTitle').textContent=`最近請假申請｜${u.name||seatLabel(activeSeat)}`;
+
+$('requests').innerHTML=(active.requests||[]).length
+  ? active.requests.slice(0,3).map(x=>`<div class="row"><div><b>${esc(x.date)}</b><div class="muted">${esc(x.reason)}</div></div><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></div>`).join('')
+  : '<div class="empty">沒有補卡申請</div>';
+
+$('homeLeaveRequests').innerHTML=(active.leaveRequests||[]).length
+  ? active.leaveRequests.slice(0,3).map(x=>`<div class="row"><div><b>${esc(x.date)}｜${esc(x.category)}</b><div class="muted">${esc(x.mode==='部分時數'?x.startTime+'–'+x.endTime+'（'+x.leaveHours+' 小時）':'整日')}｜${esc(x.reason)}</div></div><span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></div>`).join('')
+  : '<div class="empty">沒有請假申請</div>';
+
+$('makeupHistory').innerHTML=(active.requests||[]).length
+  ? active.requests.map(x=>`<div class="row"><div><b>${esc(x.date)}｜${esc(x.timeIn||'—')}–${esc(x.timeOut||'—')}</b><div class="muted">${esc(x.reason)}${x.note?'｜審核備註：'+esc(x.note):''}</div></div><div class="request-side">${cancelRequestBtn('makeup',x)}<span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></div></div>`).join('')
+  : '<div class="empty">目前沒有補打卡申請</div>';
+
+$('leaveHistory').innerHTML=(active.leaveRequests||[]).length
+  ? active.leaveRequests.map(x=>`<div class="row"><div><b>${esc(x.date)}｜${esc(x.category)}</b><div class="muted">${esc(x.scheduleText||'')}｜${esc(x.mode==='部分時數'?x.startTime+'–'+x.endTime+'（'+x.leaveHours+' 小時）':'整日')}${x.substituteText?'｜代班：'+esc(x.substituteText):''}｜${esc(x.reason)}</div></div><div class="request-side">${cancelRequestBtn('leave',x)}<span class="badge ${badgeClass(x.status)}">${esc(x.status)}</span></div></div>`).join('')
+  : '<div class="empty">目前沒有請假申請</div>'}
+function render(){renderWorkspace()}
+/* V9.10：工讀生自行取消「待審核」的請假或補打卡申請 */
+function cancelRequestBtn(kind,x){
+  return x.status==='待審核'?`<button class="btn cancel-request-btn" type="button" onclick="cancelRequest('${kind}','${esc(x.id)}','${esc(x.date)}')">取消申請</button>`:'';
+}
+function cancelRequest(kind,id,date){
+  const label=kind==='leave'?'請假申請':'補打卡申請';
+  uiConfirm('確定要取消 '+date+' 的'+label+'嗎？\n取消後如需請假或補卡，請重新送出。',{title:'取消'+label,okText:'取消申請',cancelText:'保留',danger:true}).then(ok=>{if(ok)call(kind==='leave'?'cancelLeave':'cancelMakeup',[id],(_,m)=>toast(m))});
+}
+
+/** V10：打卡前依設定取得定位（值班電腦端 channel=desktop） */
+function punchSeat(k){if(!requireSeat(k))return;const g=(seats[k].state||{}).geo;v10WithGeo(g,'desktop',geo=>callAsSeat(k,'punch',[geo],(_,m)=>toast(m)))}
+/* =========================================================
+   V10.0 打卡定位
+   ---------------------------------------------------------
+   後端 getWorkerDashboard 回傳 geo={enabled,scope}。
+   需要定位時，先用瀏覽器取得高精度位置（逾時 15 秒、不用快取），
+   再把座標、誤差、定位時間一起送給 punch()，由後端判斷距離。
+   ========================================================= */
+function v10NeedGeo(geo,channel){return !!(geo&&geo.enabled&&(geo.scope==='全部'||channel==='mobile'))}
+function v10WithGeo(geo,channel,cb){
+  if(!v10NeedGeo(geo,channel))return cb({channel:channel});
+  if(!navigator.geolocation)return toast('這個瀏覽器無法取得定位，請改用值班電腦打卡');
+  toast('正在取得定位…');
+  navigator.geolocation.getCurrentPosition(
+    pos=>cb({channel:channel,lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,locatedAt:pos.timestamp||Date.now()}),
+    err=>toast(err.code===1?'請允許瀏覽器使用位置資訊，才能打卡':'無法取得定位，請到窗邊或開啟 GPS 後再試'),
+    {enableHighAccuracy:true,timeout:15000,maximumAge:0});
+}
+/** 未下班紀錄提醒（今天以前有上班、沒有下班） */
+function v10OpenWarn(d){
+  const list=(d&&d.openRecords)||[];if(!list.length)return '';
+  return `<div class="v10-open-warn"><b>有 ${list.length} 筆未下班紀錄</b><span>${list.slice(0,3).map(r=>esc(r.date)+' 上班 '+esc(r.in)).join('、')}${list.length>3?'…':''}。請申請補卡補上下班時間，工時才會計算。</span></div>`;
+}
+
+function renderUnfinishedSubmissionHistory(){
+  const box=$('unfinishedSubmissionHistory');
+  if(!box)return;
+  const list=seats[activeSeat]?.state?.submittedUnfinished||[];
+  box.innerHTML=list.length?list.slice(0,5).map(x=>`
+    <div class="unfinished-history-row">
+      <div><b>${esc(x.title)}</b><span>${esc(x.reportedAt||x.created||'')}</span></div>
+      <span class="badge ${x.reviewStatus==='待審核'?'warn':x.reviewStatus==='已退回'?'bad':''}">${esc(x.reviewStatus||x.status||'待審核')}</span>
+    </div>`).join(''):'<div class="empty">目前沒有提報紀錄</div>';
+}
+function openUnfinishedSubmitDialog(){
+  if(!requireActiveSeat())return;
+  const u=seats[activeSeat]?.user||seats[activeSeat]?.state?.user||{};
+  $('unfinishedReporterText').textContent=`${seatLabel(activeSeat)}｜${u.name||u.studentId||'工讀生'}`;
+  $('unfinishedTitle').value='';
+  $('unfinishedPriority').value='一般';
+  $('unfinishedNote').value='';
+  renderUnfinishedSubmissionHistory();
+  if(!$('unfinishedSubmitDialog').open)$('unfinishedSubmitDialog').showModal();
+}
+function closeUnfinishedSubmitDialog(){
+  if($('unfinishedSubmitDialog').open)$('unfinishedSubmitDialog').close();
+}
+function submitUnfinishedReport(){
+  if(!requireActiveSeat())return;
+  const k=activeSeat;
+  const title=$('unfinishedTitle').value.trim();
+  if(!title)return toast('請輸入未完成事項內容');
+
+  if($('unfinishedSubmitDialog').open)$('unfinishedSubmitDialog').close();
+  callAsSeat(k,'submitUnfinishedItem',[{
+    title:title,
+    priority:$('unfinishedPriority').value,
+    note:$('unfinishedNote').value.trim()
+  }],(_,m)=>{
+    toast(m);
+  },()=>{
+    requestAnimationFrame(()=>{
+      if(!$('unfinishedSubmitDialog').open)$('unfinishedSubmitDialog').showModal();
+    });
+  });
+}
+
+let todoCompleteTargetId='',todoCompleteTargetSeat='';
+function openTodoCompleteDialog(id){const all=collectSharedTodos(),x=all.find(v=>v.id===id);if(!x)return toast('找不到未完成事項');const k=todoSeatForId(id);if(!k)return toast('目前登入的兩個席位都不是此待辦的指派對象');todoCompleteTargetId=id;todoCompleteTargetSeat=k;$('todoCompleteTargetText').textContent=x.title;const u=seats[k].user||seats[k].state?.user||{};$('todoCompleteActorText').textContent=`由 ${seatLabel(k)}｜${u.name||u.studentId||'工讀生'} 標記完成`;$('todoCompleteNote').value='';if(!$('todoCompleteDialog').open)$('todoCompleteDialog').showModal()}
+function closeTodoCompleteDialog(){if($('todoCompleteDialog').open)$('todoCompleteDialog').close();todoCompleteTargetId='';todoCompleteTargetSeat='';$('todoCompleteNote').value=''}
+function confirmTodoComplete(){const id=todoCompleteTargetId,k=todoCompleteTargetSeat;if(!id||!k)return toast('找不到未完成事項或操作身分');const note=$('todoCompleteNote').value.trim();if(note.length>500)return toast('完成備註請控制在 500 字以內');if($('todoCompleteDialog').open)$('todoCompleteDialog').close();callAsSeat(k,'completeTodo',[id,note],(_,m)=>{todoCompleteTargetId='';todoCompleteTargetSeat='';$('todoCompleteNote').value='';toast(m)},()=>{todoCompleteTargetId=id;todoCompleteTargetSeat=k;requestAnimationFrame(()=>{if(!$('todoCompleteDialog').open)$('todoCompleteDialog').showModal()})})}
+function initMonthPicker(){
+  const d=new Date(),y=d.getFullYear(),cm=d.getMonth()+1;
+  $('attYear').innerHTML=Array.from({length:7},(_,i)=>y-2+i).map(v=>`<option value="${v}" ${v===y?'selected':''}>${v} 年</option>`).join('');
+  $('attMonthNo').innerHTML=Array.from({length:12},(_,i)=>i+1).map(v=>`<option value="${String(v).padStart(2,'0')}" ${v===cm?'selected':''}>${v} 月</option>`).join('');
+  $('attYear').value=String(y);
+  $('attMonthNo').value=String(cm).padStart(2,'0');
+}function attendanceMonth(){
+  const y=$('attYear')&&$('attYear').value,m=$('attMonthNo')&&$('attMonthNo').value;
+  if(y&&m)return String(y)+'-'+String(m).padStart(2,'0');
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}initMonthPicker();
+function loadAttendance(done,fail){
+  syncActiveRefs();
+  const k=activeSeat,month=attendanceMonth();
+  if(!seats[k]?.token){fail&&fail(new Error('未登入'));return}
+  showCachedAttendanceForSeat(k,month);
+  callAsSeat(k,'getWorkerMonthAttendance',[month],d=>{
+    if(window.__autoRefreshGuard&&!window.__autoRefreshGuard()){window.__autoRefreshCancelled=true;done&&done('__cancelled__');return}
+    setAttendanceCache(k,month,d);
+    if(activeSeat!==k||attendanceMonth()!==month){done&&done('__cancelled__');return}
+    attData=d;renderAttendance();
+    const other=seatOther(k);
+    if(seats[other]?.token&&!getAttendanceCache(other,month))prefetchAttendanceForSeat(other,month,false);
+    done&&done()
+  },fail)
+}
+function renderAttendance(){const c=attData.counts||{};$('aScheduled').textContent=c.scheduled??0;$('aPunched').textContent=c.punched??0;$('aMissing').textContent=c.missing??0;$('aLeave').textContent=c.leave??0;$('aHours').textContent=(c.hoursConfirmed||0)+(c.hoursPending||0);$('aHoursSub').textContent=c.hoursPending?'本月工時（'+c.hoursPending+' 待確認）':'本月工時';const [y,m]=attData.month.split('-').map(Number),days=new Date(y,m,0).getDate(),first=new Date(y,m-1,1).getDay(),map={};(attData.rows||[]).forEach(r=>map[r.day]=r);let html='';for(let i=0;i<first;i++)html+='<div class="day off"></div>';for(let d=1;d<=days;d++){const r=map[d];if(!r){html+=`<div class="day off"><div class="n">${d}</div></div>`;continue}let cls=['已打卡','代班已打卡'].some(x=>r.status.startsWith(x))?'good':r.status==='已請假'?'leave':r.status.includes('請假審核中')?'pending':['未打卡','打卡未完成'].some(x=>r.status.startsWith(x))?'missing':'';html+=`<div class="day ${cls}"><div class="n">${d}</div><div class="sch">${esc(r.scheduleText)}</div><div class="st">${esc(r.status)}</div>${r.timeIn||r.timeOut?`<div class="sch">${esc(r.timeIn||'—')}–${esc(r.timeOut||'—')}</div>`:''}${r.hoursState?`<div class="att-hours">${esc(r.hours)} 小時${r.hoursState==='待確認'?'（待確認）':''}</div>`:''}</div>`}$('attCalendar').innerHTML=html}
+function updateLeaveMode(){
+  const partial=$('lvMode')?.value==='部分時數';
+  ['lvStartField','lvEndField','lvTimeHint'].forEach(id=>{const el=$(id);if(el)el.hidden=!partial});
+}
+function sendLeave(){
+  if(!requireActiveSeat())return;
+  const mode=$('lvMode').value,startTime=$('lvStart').value,endTime=$('lvEnd').value;
+  if(mode==='部分時數'&&(!startTime||!endTime||endTime<=startTime))return toast('請填寫正確的部分請假起訖時間');
+  call('submitLeave',[{date:$('lvDate').value,category:$('lvCategory').value,reason:$('lvReason').value,mode:mode,startTime:startTime,endTime:endTime}],(_,m)=>{
+    toast(m);$('lvDate').value='';$('lvDateBtn').textContent='選擇日期';$('lvDateBtn').classList.add('placeholder');$('lvReason').value='';$('lvStart').value='';$('lvEnd').value='';$('lvMode').value='整日';updateLeaveMode();
+  });
+}
+function sendMakeupPage(){if(!requireActiveSeat())return;const t=$('mTypePage').value,ti=t==='out'?'':$('mInPage').value,to=t==='in'?'':$('mOutPage').value;if(t==='in'&&!ti)return toast('請選擇上班時間');if(t==='out'&&!to)return toast('請選擇下班時間');if(t==='both'&&(!ti||!to))return toast('請完整選擇上下班時間');call('submitMakeup',[{date:$('mDate').value,timeIn:ti,timeOut:to,reason:$('mReasonPage').value}],(_,m)=>{toast(m);$('mDate').value='';$('mDateBtn').textContent='選擇日期';$('mDateBtn').classList.add('placeholder');$('mInPage').value=$('mOutPage').value=$('mReasonPage').value='';$('mTypePage').value='in';updateMakeupPageType()})}
+function updateClock(){
+  const el=$('clock');
+  if(!el)return;
+  el.textContent=new Date().toLocaleTimeString('zh-TW',{
+    hour:'2-digit',
+    minute:'2-digit',
+    second:'2-digit',
+    hour12:false
+  });
+}
+updateClock();
+setInterval(updateClock,1000);
+if(anySeatLoggedIn())resetIdleLogout();
+load();
+</script>
+<div class="floating-page-scrollbar" id="floatingPageScrollbar" aria-hidden="true">
+  <div class="floating-page-scrollbar-thumb" id="floatingPageScrollbarThumb"></div>
+</div>
+
+
+<script id="floating-page-scrollbar-script">
+(function(){
+  const fine=window.matchMedia&&window.matchMedia('(hover:hover) and (pointer:fine)');
+  if(!fine||!fine.matches)return;
+
+  const bar=document.getElementById('floatingPageScrollbar');
+  const thumb=document.getElementById('floatingPageScrollbarThumb');
+  if(!bar||!thumb)return;
+
+  let raf=0;
+
+  function scroller(){
+    return document.scrollingElement||document.documentElement;
+  }
+
+  function updateFloatingPageScrollbar(){
+    raf=0;
+    const s=scroller();
+    const scrollHeight=Math.max(
+      s.scrollHeight||0,
+      document.documentElement.scrollHeight||0,
+      document.body?document.body.scrollHeight:0
+    );
+    const clientHeight=window.innerHeight||s.clientHeight||0;
+    const maxScroll=Math.max(0,scrollHeight-clientHeight);
+
+    if(maxScroll<=1){
+      bar.classList.remove('show');
+      thumb.style.transform='translateY(0)';
+      return;
+    }
+
+    const trackHeight=Math.max(1,window.innerHeight-10);
+    const thumbHeight=Math.max(34,Math.min(trackHeight,trackHeight*(clientHeight/scrollHeight)));
+    const maxTop=Math.max(0,trackHeight-thumbHeight);
+    const scrollTop=Math.max(
+      window.scrollY||0,
+      s.scrollTop||0,
+      document.documentElement.scrollTop||0,
+      document.body?document.body.scrollTop:0
+    );
+    const top=maxScroll?maxTop*(scrollTop/maxScroll):0;
+
+    thumb.style.height=thumbHeight+'px';
+    thumb.style.transform='translateY('+top+'px)';
+    bar.classList.add('show');
+  }
+
+  function scheduleFloatingPageScrollbar(){
+    if(raf)return;
+    raf=requestAnimationFrame(updateFloatingPageScrollbar);
+  }
+
+  window.addEventListener('scroll',scheduleFloatingPageScrollbar,{passive:true});
+  window.addEventListener('resize',scheduleFloatingPageScrollbar,{passive:true});
+  document.addEventListener('scroll',scheduleFloatingPageScrollbar,true);
+  document.addEventListener('click',()=>setTimeout(scheduleFloatingPageScrollbar,0),true);
+  document.addEventListener('change',()=>setTimeout(scheduleFloatingPageScrollbar,0),true);
+
+  if(window.ResizeObserver&&document.body){
+    const ro=new ResizeObserver(scheduleFloatingPageScrollbar);
+    ro.observe(document.body);
+    ro.observe(document.documentElement);
+  }
+
+  if(window.MutationObserver&&document.body){
+    const mo=new MutationObserver(records=>{
+      const meaningful=records.some(r=>{
+        const t=r.target;
+        return !(t===bar||t===thumb||bar.contains(t));
+      });
+      if(meaningful)scheduleFloatingPageScrollbar();
+    });
+    mo.observe(document.body,{
+      subtree:true,
+      childList:true,
+      characterData:true,
+      attributes:true,
+      attributeFilter:['class','style','hidden']
+    });
+  }
+
+  scheduleFloatingPageScrollbar();
+  setTimeout(scheduleFloatingPageScrollbar,120);
+  setTimeout(scheduleFloatingPageScrollbar,500);
+})();
+</script>
+
+
+<script id="smart-auto-refresh-5s">
+(function(){
+  const AUTO_REFRESH_MS=5000;
+  const FAILURE_BACKOFF_MS=30000;
+  const IDLE_AFTER_SCROLL_MS=1800;
+
+  let autoRefreshBusy=false;
+  let autoRefreshBackoffUntil=0;
+  let lastUserScrollAt=0;
+  let interactionEpoch=0;
+
+  function elementVisible(el){
+    if(!el)return false;
+    const s=getComputedStyle(el);
+    return !el.classList.contains('hidden') &&
+      s.display!=='none' &&
+      s.visibility!=='hidden' &&
+      s.opacity!=='0';
+  }
+
+  function hasBlockingOverlay(){
+    return [
+      document.getElementById('loadingOverlay'),
+      document.getElementById('actionLoading'),
+      document.getElementById('authLoading')
+    ].some(elementVisible);
+  }
+
+  function userIsEditing(){
+    const a=document.activeElement;
+    if(!a)return false;
+    if(a.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select'))return true;
+    return !!a.isContentEditable;
+  }
+
+  function userIsBusy(){
+    if(document.hidden)return true;
+    if(document.querySelector('dialog[open]'))return true;
+    if(hasBlockingOverlay())return true;
+    if(userIsEditing())return true;
+    if(Date.now()-lastUserScrollAt<IDLE_AFTER_SCROLL_MS)return true;
+    return false;
+  }
+
+  function canAutoRefresh(){
+    if(autoRefreshBusy)return false;
+    if(Date.now()<autoRefreshBackoffUntil)return false;
+    if(typeof anySeatLoggedIn!=='function'||!anySeatLoggedIn())return false;
+    return !userIsBusy();
+  }
+
+  /* 只保存表單，不再保存 scrollTop。
+     舊版把一秒前的 scrollTop 寫回去，就是回彈的來源。 */
+  function captureControlState(){
+    const controls={};
+    document.querySelectorAll('input[id],select[id],textarea[id]').forEach(el=>{
+      if(el.type==='file')return;
+      controls[el.id]={
+        value:el.value,
+        checked:!!el.checked
+      };
+    });
+    return controls;
+  }
+
+  function restoreControlState(controls){
+    Object.entries(controls||{}).forEach(([id,v])=>{
+      const el=document.getElementById(id);
+      if(!el)return;
+
+      if(el.type==='checkbox'||el.type==='radio'){
+        el.checked=!!v.checked;
+        return;
+      }
+
+      if(el.tagName==='SELECT'){
+        const has=[...el.options].some(o=>o.value===v.value);
+        if(has)el.value=v.value;
+        return;
+      }
+
+      el.value=v.value;
+    });
+  }
+
+  function refreshSupplement(done,fail,cancel){
+
+    const active=document.querySelector('.view.active')?.id||'';
+    if(active==='view-attendance'&&typeof loadAttendance==='function'){
+      loadAttendance(status=>{
+        if(status==='__cancelled__'||window.__autoRefreshCancelled){cancel();return}
+        done();
+      },fail);
+    }else{
+      done();
+    }
+  }
+
+  function smartAutoRefresh(){
+    if(!canAutoRefresh())return;
+
+    autoRefreshBusy=true;
+    const controls=captureControlState();
+    const startEpoch=interactionEpoch;
+
+    window.__autoRefreshCancelled=false;
+    window.__autoRefreshGuard=()=>{
+      return interactionEpoch===startEpoch && !userIsBusy();
+    };
+
+    const cleanup=()=>{
+      window.__autoRefreshGuard=null;
+      window.__autoRefreshCancelled=false;
+      autoRefreshBusy=false;
+    };
+
+    const cancel=()=>{
+      /* 使用者在請求途中開始滑動/操作：
+         丟棄這次更新，不渲染、不改 scroll。 */
+      cleanup();
+    };
+
+    const finish=()=>{
+      restoreControlState(controls);
+      cleanup();
+    };
+
+    const fail=()=>{
+      restoreControlState(controls);
+      cleanup();
+      autoRefreshBackoffUntil=Date.now()+FAILURE_BACKOFF_MS;
+    };
+
+    try{
+      load(status=>{
+        if(status==='__cancelled__'||window.__autoRefreshCancelled){
+          cancel();
+          return;
+        }
+        refreshSupplement(finish,fail,cancel);
+      },fail);
+    }catch(e){
+      fail();
+    }
+  }
+
+  function markInteraction(){
+    interactionEpoch++;
+  }
+
+  function markScrollInteraction(){
+    interactionEpoch++;
+    lastUserScrollAt=Date.now();
+  }
+
+  /* 任一操作都可以取消「正在路上的」自動更新。
+     scroll / wheel / touch 再額外延後下一次刷新。 */
+  window.addEventListener('scroll',markScrollInteraction,{passive:true});
+  document.addEventListener('scroll',markScrollInteraction,true);
+  window.addEventListener('wheel',markScrollInteraction,{passive:true});
+  document.addEventListener('touchstart',markScrollInteraction,{passive:true});
+  document.addEventListener('touchmove',markScrollInteraction,{passive:true});
+  document.addEventListener('touchend',markScrollInteraction,{passive:true});
+  document.addEventListener('pointerdown',markInteraction,{passive:true});
+  document.addEventListener('keydown',markInteraction,true);
+
+  setInterval(smartAutoRefresh,AUTO_REFRESH_MS);
+
+  document.addEventListener('visibilitychange',()=>{
+    markInteraction();
+    if(!document.hidden)setTimeout(smartAutoRefresh,300);
+  });
+})();
+</script>
+
+
+<script id="enter-to-login-v2">
+(function(){document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.isComposing)return;const id=e.target&&e.target.id||'',m=id.match(/^seat([AB])(StudentId|Pin)$/);if(!m)return;const k=m[1],pin=document.getElementById('seat'+k+'Pin');if(m[2]==='StudentId'&&pin&&!pin.value.trim()){e.preventDefault();pin.focus();return}e.preventDefault();if(typeof loginSeat==='function')loginSeat(k)})})();
+</script>
+
+<!-- V10.2：自製確認視窗，取代瀏覽器內建 confirm()（內建視窗會顯示 googleusercontent 網址，樣式也跟系統不一致） -->
+<style id="ui-confirm-style">
+#uiConfirmDialog{border:0;padding:0;margin:auto;width:min(440px,calc(100vw - 32px));max-width:none;background:#fff;color:#161616;border-radius:0!important;box-shadow:0 12px 32px rgba(0,0,0,.25)}
+#uiConfirmDialog::backdrop{background:rgba(22,22,22,.5)}
+#uiConfirmDialog .uc-body{padding:20px 20px 8px;border-top:3px solid #1e3a8a}
+#uiConfirmDialog.uc-danger .uc-body{border-top-color:#da1e28}
+#uiConfirmDialog h2{margin:0 0 10px;font-size:18px;font-weight:700;color:#161616}
+#uiConfirmDialog .uc-msg{margin:0;font-size:14px;line-height:1.7;color:#161616;white-space:pre-line}
+#uiConfirmDialog .uc-actions{display:grid;grid-template-columns:1fr 1fr;margin-top:20px}
+#uiConfirmDialog .uc-actions button{min-height:52px;border:0;border-radius:0!important;font:600 14px inherit;cursor:pointer;text-align:left;padding:0 16px}
+#uiConfirmDialog .uc-cancel{background:#e0e0e0;color:#161616}
+#uiConfirmDialog .uc-cancel:hover{background:#c6c6c6}
+#uiConfirmDialog .uc-ok{background:#1e3a8a;color:#fff}
+#uiConfirmDialog .uc-ok:hover{background:#172b66}
+#uiConfirmDialog.uc-danger .uc-ok{background:#da1e28}
+#uiConfirmDialog.uc-danger .uc-ok:hover{background:#b81921}
+#uiConfirmDialog button:focus-visible{outline:2px solid #1e3a8a;outline-offset:-4px}
+[data-theme="dark"] #uiConfirmDialog{background:#262626;color:#f4f4f4}
+[data-theme="dark"] #uiConfirmDialog h2,[data-theme="dark"] #uiConfirmDialog .uc-msg{color:#f4f4f4}
+[data-theme="dark"] #uiConfirmDialog .uc-cancel{background:#393939;color:#f4f4f4}
+</style>
+<dialog id="uiConfirmDialog" aria-labelledby="uiConfirmTitle">
+  <div class="uc-body"><h2 id="uiConfirmTitle">請確認</h2><p class="uc-msg" id="uiConfirmMsg"></p></div>
+  <div class="uc-actions"><button type="button" class="uc-cancel" id="uiConfirmCancel">取消</button><button type="button" class="uc-ok" id="uiConfirmOk">確定</button></div>
+</dialog>
+<script>
+/**
+ * 系統確認視窗（取代 confirm）。用法：uiConfirm('確定刪除？',{title:'刪除排班',okText:'刪除',danger:true}).then(ok=>{if(ok)…})
+ * 按 Esc 或點背景等同取消。回傳 Promise<boolean>。
+ */
+function uiConfirm(message,opt){
+  opt=opt||{};
+  const dlg=document.getElementById('uiConfirmDialog');
+  return new Promise(resolve=>{
+    dlg.classList.toggle('uc-danger',!!opt.danger);
+    document.getElementById('uiConfirmTitle').textContent=opt.title||'請確認';
+    document.getElementById('uiConfirmMsg').textContent=message||'';
+    const ok=document.getElementById('uiConfirmOk'),cancel=document.getElementById('uiConfirmCancel');
+    ok.textContent=opt.okText||'確定';cancel.textContent=opt.cancelText||'取消';
+    let done=false;
+    const finish=v=>{if(done)return;done=true;ok.onclick=cancel.onclick=dlg.onclick=dlg.oncancel=null;if(dlg.open)dlg.close();resolve(v)};
+    ok.onclick=()=>finish(true);
+    cancel.onclick=()=>finish(false);
+    dlg.oncancel=e=>{e.preventDefault();finish(false)};
+    dlg.onclick=e=>{if(e.target===dlg)finish(false)};   // 點背景取消
+    dlg.showModal();
+    setTimeout(()=>cancel.focus(),0);   // 預設焦點放在「取消」，避免誤按 Enter 直接執行
+  });
+}
+</script>
+</body></html>

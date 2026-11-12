@@ -13,7 +13,11 @@
   <script>
     window.GAS_URL = 'https://script.google.com/macros/s/AKfycbz7bNL4Wl_HyXTaVoMdUrFW7zqO1V7nClpFPFKLCNsj9B9YR9ecVm7ITtdL8_kVBIfWdw/exec';
   </script>
-  <script src="../shared/gas-shim.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=3"></script>
+<!-- 管院後台共用登入：一次登入，所有系統後台通行（設定說明見 shared/admin-sso.js） -->
+<script>window.CM_ADMIN = {"tokenKey": "tvWallAdminToken", "loginFn": "adminLogin", "logoutFn": "adminLogout"};</script>
+<script src="../shared/sso-config.js?v=1"></script>
+<script src="../shared/admin-sso.js?v=1"></script>
   <!-- 英數字字型 IBM Plex Sans；中文自動落到微軟正黑體 -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">

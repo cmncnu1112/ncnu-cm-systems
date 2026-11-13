@@ -1,0 +1,2170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>教室鑰匙與設備借用</title>
+  <!-- GitHub Pages 版：先載入後端網址設定，再載入轉接頭（讓 google.script.run 改走 fetch 呼叫 GAS 的 doPost） -->
+  <script src="./config.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=3"></script>
+<meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    /* ============================================================
+       視覺改版（V2.4.0）— 與 Admin.html 共用同一套色票／圓角對映，
+       讓學生端與行政端維持一致的「深藍＋琥珀橘」品牌視覺語言。
+       BORROW（立即借用）維持 teal→深藍；RESERVE（提前預約）維持
+       indigo→琥珀橘，兩個模式的强調色依然清楚可分辨，只是換成
+       學校行政系統慣用的沉穩配色，而非消費端 App 的亮色系。
+       同樣不更動任何 class 名稱與 google.script.run 綁定邏輯。
+       ============================================================ */
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            slate: { 50:'#f4f4f4', 100:'#e8e8e8', 200:'#e0e0e0', 300:'#c6c6c6', 400:'#8d8d8d', 500:'#6f6f6f', 600:'#525252', 700:'#393939', 800:'#262626', 900:'#161616', 950:'#161616' },
+            teal: {
+              50:  '#eef2fb', 100: '#dbe4f7', 200: '#b7c9ef', 300: '#93a9dd',
+              400: '#4f6cc4', 500: '#2a4fa0', 600: '#1e3a8a', 700: '#16295f',
+              800: '#0f1d45', 900: '#0a1530'
+            },
+            indigo: {
+              50:  '#fef6e7', 100: '#fdecc8', 200: '#fad999', 300: '#f6c66a',
+              400: '#f0a93a', 500: '#e08c15', 600: '#d97706', 700: '#b45f04',
+              800: '#92480a', 900: '#78390c'
+            },
+            amber: {
+              50:  '#fef6e7', 100: '#fdecc8', 200: '#fad999', 300: '#f6c66a',
+              400: '#f0a93a', 500: '#e08c15', 600: '#d97706', 700: '#b45f04',
+              800: '#92480a', 900: '#78390c'
+            }
+          },
+          borderRadius: { none:'0', sm:'0', DEFAULT:'0', md:'0', lg:'0', xl:'0', '2xl':'0', '3xl':'0', full:'0' } /* V2.4.6：Carbon 直角，所有 rounded-* 歸零 */
+        }
+      }
+    };
+  </script>
+  <style>
+    html { -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: "Microsoft JhengHei", "微軟正黑體", ui-sans-serif, system-ui,
+        -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    /* 原為 teal #0f766e／#f0fdfa，改為品牌深藍（與借用模式主色一致） */
+    .asset-input:checked + label { border-color:#1e3a8a; background:#eef2fb; box-shadow:0 0 0 2px rgba(30,58,138,.12); }
+    .asset-input:checked + label .check-dot { opacity:1; transform:scale(1); }
+    .asset-input:disabled + label { opacity:.48; cursor:not-allowed; background:#f8fafc; }
+    /* 原為 indigo #4f46e5／#eef2ff，改為品牌琥珀橘（與預約模式主色一致） */
+    .reserve-asset-input:checked + label { border-color:#d97706; background:#fef6e7; box-shadow:0 0 0 2px rgba(217,119,6,.12); }
+    .reserve-asset-input:checked + label .check-dot { opacity:1; transform:scale(1); }
+    .reserve-asset-input:disabled + label { opacity:.48; cursor:not-allowed; background:#f8fafc; }
+    /* V2.4.9：黑名單提醒（Carbon Inline Notification：error，低對比版，左側 3px 紅色條） */
+    .blacklist-notice{display:flex;gap:12px;align-items:flex-start;margin-top:8px;padding:12px 16px;background:#fff1f1;border-left:3px solid #da1e28;color:#161616}
+    .blacklist-notice.hidden{display:none}
+    .blacklist-icon{flex-shrink:0;width:20px;height:20px;border-radius:50%;background:#da1e28;color:#fff;font-weight:700;font-size:13px;line-height:20px;text-align:center}
+    .blacklist-title{font-size:14px;font-weight:600}
+    .blacklist-text{font-size:13px;color:#393939;margin-top:2px}
+    .hide-scrollbar::-webkit-scrollbar { display:none; }
+    .hide-scrollbar { scrollbar-width:none; }
+
+    /* 去除外層卡片邊框，改以極淡陰影呈現層次（與 Admin.html 同一設計語言），
+       僅影響 rounded-3xl 搭配 border 的既有外層容器樣式，不影響輸入框 */
+    .rounded-3xl.border{
+      border-color: transparent !important;
+      box-shadow: 0 1px 2px rgba(15,23,42,.06) !important;
+    }
+
+    /* LINE / iOS WebView：讓日期欄位不要被原生樣式撐成灰色大區塊 */
+    .reserve-date-input {
+      -webkit-appearance:none;
+      appearance:none;
+      min-height:48px;
+      height:48px;
+      background:#fff;
+      color:#0f172a;
+      line-height:1.25rem;
+    }
+    .reserve-date-input::-webkit-date-and-time-value {
+      text-align:left;
+      margin:0;
+      min-height:1.25rem;
+    }
+    .reserve-date-input::-webkit-calendar-picker-indicator {
+      opacity:.6;
+      cursor:pointer;
+    }
+
+    /* 時間改為真正的下拉式選單，選項仍由 Google Sheets 設定產生 */
+    .reserve-time-select {
+      -webkit-appearance:none;
+      appearance:none;
+      min-height:48px;
+      background:#fff;
+      color:#0f172a;
+    }
+    .reserve-time-select:invalid { color:#94a3b8; }
+
+    /* V2.3.62：18–60 歲共用觸控 / 可讀性 */
+    .main-mode-tab { min-height:44px; font-size:11px; line-height:1.25; }
+    .floor-filter-btn, .category-filter-btn { min-height:40px; font-size:12px; }
+    .primary-touch { min-height:44px; }
+    @media (min-width: 400px) {
+      .main-mode-tab { font-size:12px; }
+    }
+
+
+    /* V2.3.62：學號 / 員編欄位固定 16px，iPhone / LINE WebView 聚焦時不自動放大 */
+    #studentId,
+    #studentName,
+    #phone,
+    #department,
+    #borrowNote,
+    #reserveNote,
+    #loanHistoryStudentId,
+    #reservationHistoryStudentId {
+      font-size:16px;
+    }
+
+  
+    /* =========================================================
+       V2.4.6：全站改為 Carbon Design System 風格（學生端 Index 與行政端 Admin 共用）
+       -------------------------------------------------------------
+       設計說明（辯證觀點）：
+       正方：Carbon 的直角、扁平、以底線界定輸入框的語言，最適合
+             「每天要大量點擊、快速判讀狀態」的行政工具，資訊密度高、干擾少。
+       反方：Carbon 原生品牌色是 IBM 藍 #0f62fe、字體是 IBM Plex Sans，
+             若完全照搬，會失去本系統既有的「深藍＋琥珀橘」辨識度，
+             中文也不適合用 Plex（Plex 沒有繁中字形）。
+       折衷：採用 Carbon 的「結構規則」（直角、元件尺寸、底線輸入框、
+             資料表格分隔線、灰階層級、互動狀態），色彩維持品牌深藍／琥珀橘；
+             字體為「英數字用 IBM Plex Sans、中文用微軟正黑體」。
+       ========================================================= */
+    :root{
+      /* Carbon Gray 10 主題的中性色（取代原本偏藍的灰） */
+      --bg:#f4f4f4;            /* $background */
+      --layer:#ffffff;         /* $layer-01 */
+      --layer-2:#f4f4f4;       /* $field-02：白色圖層上的輸入框底色 */
+      --layer-hover:#e8e8e8;   /* $layer-hover */
+      --layer-active:#e0e0e0;  /* $layer-selected / 表頭 */
+      --ink:#161616;           /* $text-primary */
+      --muted:#525252;         /* $text-secondary */
+      --helper:#6f6f6f;        /* $text-helper */
+      --border-subtle:#e0e0e0; /* $border-subtle */
+      --border-strong:#8d8d8d; /* $border-strong：輸入框底線 */
+      --focus:var(--navy);     /* $focus：以品牌深藍取代 Carbon 藍 */
+    }
+
+    /* 字體：英數字 IBM Plex Sans（Carbon 標準字體）＋ 中文微軟正黑體 */
+    body, button, input, select, textarea, .app-select{
+      font-family:"IBM Plex Sans","Microsoft JhengHei","微軟正黑體",ui-sans-serif,system-ui,sans-serif;
+      letter-spacing:.16px;
+    }
+    body{color:var(--ink);background-color:var(--bg)!important}
+
+    /* 真正需要圓形的元素（步驟數字、核取圓點、讀取轉圈）改用這個 class，
+       其餘 rounded-* 一律透過 tailwind.config 歸零成直角。 */
+    .rounded-circle{border-radius:50%!important}
+
+    /* Carbon 文字輸入框：無外框、底色 $field、底部 1px 線、直角；聚焦時 2px 深藍內框 */
+    input[type=text],input[type=search],input[type=tel],input[type=number],input[type=date],
+    select,textarea,.app-select{
+      border:0!important;
+      border-bottom:1px solid var(--border-strong)!important;
+      border-radius:0!important;
+      background-color:var(--layer-2)!important;
+      color:var(--ink);
+      box-shadow:none!important;
+    }
+    input[type=text]:focus,input[type=search]:focus,input[type=tel]:focus,input[type=number]:focus,
+    input[type=date]:focus,select:focus,textarea:focus,.app-select:focus{
+      outline:2px solid var(--focus)!important;
+      outline-offset:-2px;
+      box-shadow:none!important;
+    }
+    input::placeholder,textarea::placeholder{color:#a8a8a8}
+    input:disabled,select:disabled,textarea:disabled{color:#c6c6c6;border-bottom-color:transparent!important;cursor:not-allowed}
+
+    /* Carbon 按鈕的聚焦樣式：2px 深藍框＋1px 白色內框 */
+    button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;box-shadow:inset 0 0 0 3px #fff}
+
+    /* ===== Carbon：學生端補充 ===== */
+    /* 選取卡片：直角，選取狀態用 2px 內框（Carbon Selectable Tile） */
+    .asset-input:checked + label, .reserve-asset-input:checked + label{border-radius:0}
+    .asset-input:checked + label{box-shadow:inset 0 0 0 2px #1e3a8a}
+    .reserve-asset-input:checked + label{box-shadow:inset 0 0 0 2px #d97706}
+    .reserve-date-input{background:var(--layer-2)!important;height:48px}
+
+  
+    /* V2.5.0：Lucide 圖示（取代 emoji）。1em 大小、顏色繼承文字，與中文字垂直置中 */
+    .licon{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex-shrink:0;stroke-width:2}
+    .licon-sm{width:1em;height:1em}
+    .licon-lg{width:1.5em;height:1.5em}
+    .licon-xl{width:2.5rem;height:2.5rem}
+    .btn-v2{gap:6px}
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+  <div class="max-w-lg mx-auto min-h-screen bg-white sm:my-6 sm:rounded-none sm:shadow-xl sm:border sm:border-slate-200 overflow-hidden relative">
+
+    <header class="px-5 pt-6 pb-4 border-b border-slate-100 bg-white sticky top-0 z-20">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-[11px] tracking-[.18em] font-bold text-teal-600 uppercase">Management College</p>
+          <h1 id="systemName" class="mt-1 text-xl font-black tracking-tight">教室鑰匙與設備借用</h1>
+          <p class="text-xs text-slate-400 mt-1">借用品與教室提前登記</p>
+        </div>
+        <button onclick="reloadAssets()" class="shrink-0 w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 active:scale-95 transition" aria-label="重新整理"><svg class="licon licon-lg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></button>
+      </div>
+
+      <div class="grid grid-cols-4 p-1 rounded-2xl bg-slate-100 mt-4 gap-0.5">
+        <button id="modeBorrow" type="button" onclick="switchMode('BORROW')" class="main-mode-tab rounded-xl px-1 py-2.5 font-black bg-white text-teal-700 shadow-sm"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /><path d="M12 22V12" /><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7" /><path d="m7.5 4.27 9 5.15" /></svg> 立即借用</button>
+        <button id="modeReserve" type="button" onclick="switchMode('RESERVE')" class="main-mode-tab rounded-xl px-1 py-2.5 font-black text-slate-500"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h5" /><path d="M17.5 17.5 16 16.3V14" /><circle cx="16" cy="16" r="6" /></svg> 提前預約</button>
+        <button id="modeLoanHistory" type="button" onclick="switchMode('LOAN_HISTORY')" class="main-mode-tab rounded-xl px-1 py-2.5 font-black text-slate-500"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" /><path d="M14 8H8" /><path d="M16 12H8" /><path d="M13 16H8" /></svg> 借用紀錄</button>
+        <button id="modeReservationHistory" type="button" onclick="switchMode('RESERVATION_HISTORY')" class="main-mode-tab rounded-xl px-1 py-2.5 font-black text-slate-500"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /><path d="M8 14h.01" /><path d="M12 14h.01" /><path d="M16 14h.01" /><path d="M8 18h.01" /><path d="M12 18h.01" /><path d="M16 18h.01" /></svg> 預約紀錄</button>
+      </div>
+    </header>
+
+    <main class="px-4 py-4 space-y-4 pb-32">
+      <section id="borrowerSection" class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-3 mb-4">
+          <span id="borrowerStepBadge" class="w-8 h-8 rounded-circle bg-teal-600 text-white flex items-center justify-center font-black text-sm transition-colors">1</span>
+          <div>
+            <h2 class="font-black text-sm">借用人資料</h2>
+            <p class="text-[11px] text-slate-400">輸入學號 / 員編，自動帶入資料</p>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1.5">學號 / 員編 *</label>
+            <div class="flex gap-2">
+              <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" class="borrower-mode-field flex-1 min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500" placeholder="例如：110305001">
+              <button id="studentSearchBtn" type="button" onclick="lookupStudent()" class="primary-touch px-4 rounded-2xl bg-slate-800 text-white text-xs font-bold active:scale-95 transition">查詢</button>
+            </div>
+            <p id="studentStatus" class="mt-1.5 text-[11px] min-h-[16px] text-slate-400"></p>
+            <!-- V2.4.9：黑名單提醒。只告知狀態與聯絡窗口，不顯示後台填寫的原因 -->
+            <div id="blacklistNotice" class="blacklist-notice hidden" role="alert" aria-live="assertive">
+              <span class="blacklist-icon" aria-hidden="true"><svg class="licon licon-lg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg></span>
+              <div>
+                <p class="blacklist-title">此學號／員編目前為黑名單</p>
+                <p class="blacklist-text">暫時無法借用或預約，請詢問管理學院院辦人員。</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">姓名 *</label>
+              <input id="studentName" type="text" autocomplete="name" class="borrower-mode-field w-full rounded-2xl border border-slate-200 px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500" placeholder="姓名">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">聯絡電話 *</label>
+              <input id="phone" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="tel" autocapitalize="off" spellcheck="false" enterkeyhint="done" class="borrower-mode-field w-full rounded-2xl border border-slate-200 px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500" placeholder="09xxxxxxxx">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1.5">系所 / 單位 *</label>
+            <input id="department" type="text" autocomplete="organization" class="borrower-mode-field w-full rounded-2xl border border-slate-200 px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500" placeholder="例如：資管系">
+          </div>
+        </div>
+      </section>
+
+      <!-- Immediate borrow -->
+      <div id="borrowFlow" class="space-y-4">
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-8 h-8 rounded-circle bg-teal-600 text-white flex items-center justify-center font-black text-sm">2</span>
+            <div class="flex-1">
+              <h2 class="font-black text-sm">選擇實際拿取的物品</h2>
+              <p class="text-[11px] text-slate-400">鑰匙、遙控器可單借；數量型設備直接選數量</p>
+            </div>
+            <span id="selectedCount" class="text-[11px] font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full">0 種</span>
+          </div>
+
+          <div class="grid grid-cols-2 p-1 rounded-2xl bg-slate-100 mb-4">
+            <button id="tabRoom" onclick="switchAssetTab('ROOM')" type="button" class="rounded-xl py-2.5 text-xs font-black bg-white text-teal-700 shadow-sm"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 22v-4a2 2 0 1 0-4 0v4" /><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10" /><path d="M18 5v17" /><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6" /><path d="M6 5v17" /><circle cx="12" cy="9" r="2" /></svg> 教室借用品</button>
+            <button id="tabEquipment" onclick="switchAssetTab('EQUIPMENT')" type="button" class="rounded-xl py-2.5 text-xs font-black text-slate-500"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7 3 5" /><path d="M9 6V3" /><path d="m13 7 2-2" /><circle cx="9" cy="13" r="3" /><path d="M11.83 12H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h2.17" /><path d="M16 16h2" /></svg> 設備 / 庫存</button>
+          </div>
+
+          <div id="roomPanel">
+            <div class="relative mb-2.5">
+              <input id="roomSearch" oninput="renderRooms()" type="search" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pl-10 text-sm outline-none focus:ring-2 focus:ring-teal-500" placeholder="搜尋教室，例如 R205">
+              <span class="absolute left-3.5 top-3 text-slate-400"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg></span>
+            </div>
+
+            <div id="roomFloorTabs" class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-1"></div>
+
+            <div id="roomList" class="grid grid-cols-1 gap-2">
+              <div class="text-center py-8 text-xs text-slate-400">載入教室中…</div>
+            </div>
+          </div>
+
+          <div id="equipmentPanel" class="hidden">
+            <div class="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-circle bg-emerald-500"></span>
+                  <p class="text-xs font-black text-slate-700">器材即時庫存</p>
+                </div>
+                <p id="equipmentStockSummary" class="mt-1 text-[11px] text-slate-500 font-medium">讀取庫存中…</p>
+                <p id="equipmentStockUpdatedAt" class="mt-0.5 text-[9px] text-slate-400"></p>
+              </div>
+              <button id="inventoryRefreshBtn" type="button" onclick="refreshPublicAvailability(false)" class="shrink-0 px-3 py-2 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-600 font-black active:scale-95 transition"><svg class="licon licon-sm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg> 更新庫存</button>
+            </div>
+            <div class="relative mb-3">
+              <input id="equipmentSearch" oninput="renderEquipments()" type="search" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pl-10 text-sm outline-none focus:ring-2 focus:ring-teal-500" placeholder="搜尋設備">
+              <span class="absolute left-3.5 top-3 text-slate-400"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg></span>
+            </div>
+            <div id="equipmentCategories" class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-1"></div>
+            <div id="equipmentList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"><div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">載入設備中…</div></div>
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-8 h-8 rounded-circle bg-teal-600 text-white flex items-center justify-center font-black text-sm">3</span>
+            <div>
+              <h2 class="font-black text-sm">預計歸還</h2>
+              <p class="text-[11px] text-slate-400">選最接近的時間即可</p>
+            </div>
+          </div>
+          <div id="returnOptions" class="grid grid-cols-2 gap-2"></div>
+          <div class="mt-4">
+            <label class="block text-xs font-bold text-slate-600 mb-1.5">備註</label>
+            <textarea id="borrowNote" rows="2" class="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500" placeholder="例如：活動借用、長期借用…"></textarea>
+          </div>
+          <div class="mt-4 rounded-2xl bg-amber-50 px-4 py-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-amber-600 text-base"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg></span>
+              <span class="text-sm font-black text-amber-900">提醒</span>
+            </div>
+            <ol class="list-decimal pl-5 space-y-1 text-xs leading-6 text-amber-900 font-medium">
+              <li>課程若超過下午5點，請點選歸還箱，謝謝。</li>
+              <li>請登記「實際拿取」的物品與數量。數量型設備會依目前可用庫存限制借用數量。</li>
+            </ol>
+          </div>
+        </section>
+      </div>
+
+      <!-- Reservation flow -->
+      <div id="reserveFlow" class="hidden space-y-4">
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-8 h-8 rounded-circle bg-indigo-600 text-white flex items-center justify-center font-black text-sm">2</span>
+            <div class="flex-1">
+              <h2 class="font-black text-sm">選擇預約借用品</h2>
+              <p class="text-[11px] text-slate-400">鑰匙、遙控器可單獨預約；數量型設備直接選數量</p>
+            </div>
+            <span id="reserveSelectedCount" class="text-[11px] font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full">0 種</span>
+          </div>
+
+          <div class="grid grid-cols-2 p-1 rounded-2xl bg-slate-100 mb-4">
+            <button id="reserveTabRoom" onclick="switchReserveAssetTab('ROOM')" type="button" class="rounded-xl py-2.5 text-xs font-black bg-white text-indigo-700 shadow-sm"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 22v-4a2 2 0 1 0-4 0v4" /><path d="m18 10 3.447 1.724a1 1 0 0 1 .553.894V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7.382a1 1 0 0 1 .553-.894L6 10" /><path d="M18 5v17" /><path d="m4 6 7.106-3.553a2 2 0 0 1 1.788 0L20 6" /><path d="M6 5v17" /><circle cx="12" cy="9" r="2" /></svg> 教室借用品</button>
+            <button id="reserveTabEquipment" onclick="switchReserveAssetTab('EQUIPMENT')" type="button" class="rounded-xl py-2.5 text-xs font-black text-slate-500"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7 3 5" /><path d="M9 6V3" /><path d="m13 7 2-2" /><circle cx="9" cy="13" r="3" /><path d="M11.83 12H20a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h2.17" /><path d="M16 16h2" /></svg> 設備 / 庫存</button>
+          </div>
+
+          <div id="reserveRoomPanel">
+            <div class="relative mb-2.5">
+              <input id="reserveRoomSearch" oninput="renderReservationRooms()" type="search" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pl-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="搜尋教室，例如 R205">
+              <span class="absolute left-3.5 top-3 text-slate-400"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg></span>
+            </div>
+
+            <div id="reserveRoomFloorTabs" class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-1"></div>
+
+            <div id="reserveRoomList" class="grid grid-cols-1 gap-2">
+              <div class="text-center py-8 text-xs text-slate-400">載入教室中…</div>
+            </div>
+          </div>
+
+          <div id="reserveEquipmentPanel" class="hidden">
+            <div class="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-circle bg-indigo-500"></span>
+                  <p class="text-xs font-black text-slate-700">器材預約庫存</p>
+                </div>
+                <p id="reserveEquipmentStatus" class="mt-1 text-[11px] text-slate-500 font-medium">選擇第 3 項時段後會自動確認可預約數量</p>
+              </div>
+              <button id="reserveInventoryRefreshBtn" type="button" onclick="refreshReservationAvailability(false)" class="shrink-0 px-3 py-2 rounded-xl bg-white border border-slate-200 text-[11px] text-slate-600 font-black active:scale-95 transition"><svg class="licon licon-sm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg> 更新</button>
+            </div>
+            <div class="relative mb-3">
+              <input id="reserveEquipmentSearch" oninput="renderReservationEquipments()" type="search" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pl-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500" placeholder="搜尋設備">
+              <span class="absolute left-3.5 top-3 text-slate-400"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg></span>
+            </div>
+            <div id="reserveEquipmentCategories" class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-1"></div>
+            <div id="reserveEquipmentList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"><div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">載入設備中…</div></div>
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-8 h-8 rounded-circle bg-indigo-600 text-white flex items-center justify-center font-black text-sm">3</span>
+            <div>
+              <h2 class="font-black text-sm">借還時間與歸還方式</h2>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">使用日期 *</label>
+              <div class="relative">
+                <input id="reserveDate" type="date" onchange="refreshReservationAvailability()" class="reserve-date-input w-full rounded-2xl border border-slate-200 px-4 pr-11 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1.5">開始時間 *</label>
+                <div class="relative">
+                  <select id="reserveStart" required onchange="onReserveStartChange()"
+                    class="reserve-time-select w-full rounded-2xl border border-slate-200 px-3 pr-9 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">請選擇</option>
+                  </select>
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">▼</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1.5">結束時間 *</label>
+                <div class="relative">
+                  <select id="reserveEnd" required onchange="onReserveEndChange()" disabled
+                    class="reserve-time-select w-full rounded-2xl border border-slate-200 px-3 pr-9 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400">
+                    <option value="">先選開始時間</option>
+                  </select>
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">▼</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">歸還方式 *</label>
+              <div class="relative">
+                <select id="reserveReturnMethod" class="reserve-time-select w-full rounded-2xl border border-slate-200 px-3 pr-9 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">請選擇</option>
+                </select>
+                <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">▼</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">歸還時間 *</label>
+              <div class="relative">
+                <select id="reserveReturnTime" class="reserve-time-select w-full rounded-2xl border border-slate-200 px-3 pr-9 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">請選擇</option>
+                </select>
+                <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">▼</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">備註</label>
+              <textarea id="reserveNote" rows="2"
+                class="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="例如：活動用途、特殊需求、借用說明…"></textarea>
+            </div>
+
+            <div class="mt-4 rounded-2xl bg-amber-50 px-4 py-4">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-amber-600 text-base"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg></span>
+                <span class="text-sm font-black text-amber-900">提醒</span>
+              </div>
+              <ol class="list-decimal pl-5 space-y-1 text-xs leading-6 text-amber-900 font-medium">
+                <li>課程若超過下午5點，請點選歸還箱，謝謝。</li>
+                <li>本表單登記預約後，時間到會自動轉成借用單，不需再多填一次，謝謝各位配合。</li>
+              </ol>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Public loan history -->
+      <div id="loanHistoryFlow" class="hidden space-y-4">
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <h2 class="font-black text-base">借用紀錄</h2>
+            <p class="mt-1 text-[11px] text-slate-400">輸入學號 / 員編即可查詢自己的借用資料。</p>
+          </div>
+
+          <div class="mt-4 rounded-2xl bg-amber-50 px-3.5 py-3 text-[11px] leading-relaxed text-amber-800">
+            <span class="font-black">提醒：</span>只能查看當月借用紀錄，資料庫一個月定期格式化一次。
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-bold text-slate-600 mb-1.5">學號 / 員編</label>
+            <div class="flex gap-2">
+              <input id="loanHistoryStudentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"
+                class="flex-1 min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-teal-500"
+                placeholder="請輸入學號 / 員編">
+              <button id="loanHistorySearchBtn" type="button" onclick="queryLoanHistory()"
+                class="primary-touch px-4 rounded-2xl bg-slate-800 text-white text-xs font-black active:scale-95 transition">查詢</button>
+            </div>
+          </div>
+
+          <div id="loanHistoryResult" class="mt-4">
+            <div class="py-10 text-center text-xs text-slate-400">輸入學號 / 員編後查詢</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Public reservation history -->
+      <div id="reservationHistoryFlow" class="hidden space-y-4">
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <h2 class="font-black text-base">預約紀錄</h2>
+            <p class="mt-1 text-[11px] text-slate-400">輸入學號 / 員編即可查詢自己的預約資料。</p>
+          </div>
+
+          <div class="mt-4 rounded-2xl bg-indigo-50 px-3.5 py-3 text-[11px] leading-relaxed text-indigo-700">
+            <span class="font-black">提醒：</span>可查看當月歷史、未來預約紀錄，資料庫一個月定期格式化一次。
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-bold text-slate-600 mb-1.5">學號 / 員編</label>
+            <div class="flex gap-2">
+              <input id="reservationHistoryStudentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"
+                class="flex-1 min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="請輸入學號 / 員編">
+              <button id="reservationHistorySearchBtn" type="button" onclick="queryReservationHistory()"
+                class="primary-touch px-4 rounded-2xl bg-slate-800 text-white text-xs font-black active:scale-95 transition">查詢</button>
+            </div>
+          </div>
+
+          <div id="reservationHistoryResult" class="mt-4">
+            <div class="py-10 text-center text-xs text-slate-400">輸入學號 / 員編後查詢</div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div id="bottomBar" class="fixed sm:absolute bottom-0 left-0 right-0 z-30 max-w-lg mx-auto">
+      <div class="bg-white/95 backdrop-blur-xl border-t border-slate-200 px-4 pt-3 safe-bottom shadow-[0_-12px_30px_rgba(15,23,42,.08)]">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p id="bottomLabel" class="text-[10px] text-slate-400 font-bold">目前已選</p>
+            <p id="selectedSummary" class="text-xs font-black truncate">尚未選擇借用品</p>
+          </div>
+          <button id="submitBtn" onclick="openConfirm()" type="button" class="shrink-0 px-5 py-3 rounded-2xl bg-teal-600 text-white text-sm font-black shadow-lg shadow-teal-600/20 active:scale-95 transition">確認送出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Confirm modal -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden bg-slate-950/40 backdrop-blur-sm p-4 items-end sm:items-center justify-center">
+    <div class="w-full max-w-md rounded-none bg-white p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <div><h3 id="confirmTitle" class="font-black text-lg">確認內容</h3><p class="text-xs text-slate-400 mt-1">最後確認一次再送出</p></div>
+        <button onclick="closeConfirm()" class="w-9 h-9 rounded-full bg-slate-100 text-slate-500 inline-flex items-center justify-center" aria-label="關閉"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg></button>
+      </div>
+      <div id="confirmContent" class="space-y-3 text-sm"></div>
+      <div class="grid grid-cols-2 gap-2 mt-5">
+        <button onclick="closeConfirm()" class="py-3 rounded-2xl bg-slate-100 text-slate-600 text-sm font-black">返回修改</button>
+        <button id="confirmSubmitBtn" onclick="submitCurrent()" class="py-3 rounded-2xl bg-teal-600 text-white text-sm font-black">確認送出</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success modal -->
+  <div id="successModal" class="fixed inset-0 z-[60] hidden bg-slate-950/40 backdrop-blur-sm p-4 items-center justify-center">
+    <div class="w-full max-w-md rounded-none bg-white p-6 shadow-2xl text-center">
+      <div class="mx-auto w-20 h-20 rounded-circle bg-emerald-600 text-white flex items-center justify-center text-4xl shadow-lg shadow-emerald-600/20"><svg class="licon licon-xl" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg></div>
+      <h2 id="successTitle" class="mt-5 text-2xl font-black text-emerald-800">登記成功</h2>
+      <p id="successText" class="mt-2 text-sm text-emerald-700"></p>
+      <div id="successInfo" class="mt-5 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-left text-sm"></div>
+      <button onclick="resetForNext()" class="mt-5 w-full py-3.5 rounded-2xl bg-emerald-600 text-white font-black">再登記一筆</button>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[70] hidden max-w-[90vw] rounded-2xl px-4 py-3 text-xs font-bold shadow-xl"></div>
+
+<script>
+  /* ===== Lucide 圖示（V2.5.0） =====
+     圖示改用 Lucide（https://lucide.dev，ISC 授權，v0.469.0），SVG 內嵌於此，不需要外部 CDN。
+     用法：licon('key-round')、licon('plus','licon-lg')；大小跟字級、顏色跟文字顏色。 */
+  const LUCIDE={
+    'air-vent':'<path d="M6 12H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 8h12" /><path d="M18.3 17.7a2.5 2.5 0 0 1-3.16 3.83 2.53 2.53 0 0 1-1.14-2V12" /><path d="M6.6 15.6A2 2 0 1 0 10 17v-5" />',
+    'building-2':'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /><path d="M10 18h4" />',
+    'check':'<path d="M20 6 9 17l-5-5" />',
+    'key-round':'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />',
+    'minus':'<path d="M5 12h14" />',
+    'plus':'<path d="M5 12h14" /><path d="M12 5v14" />',
+    'refresh-cw':'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />'
+  };
+  function licon(name,cls){
+    const body=LUCIDE[name];
+    if(!body)return '';
+    return '<svg class="licon'+(cls?' '+cls:'')+'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+body+'</svg>';
+  }
+
+  const state = {
+    data: null,
+    mode: 'BORROW',
+    assetTab: 'ROOM',
+    reserveAssetTab: 'ROOM',
+    equipmentCategory: '全部',
+    roomFloor: '全部',
+    reserveRoomFloor: '全部',
+    roomKeyIds: new Set(),
+    remoteIds: new Set(),
+    equipmentQty: new Map(),
+    returnTime: '',
+    reserveRoomKeyIds: new Set(),
+    reserveRemoteIds: new Set(),
+    reserveEquipmentCategory: '全部',
+    reserveEquipmentQty: new Map(),
+    reserveEquipmentAvailability: new Map(),
+    reserveRoomAvailability: new Map()
+  };
+
+  let studentLookupBusy = false;
+  let studentLookupLastId = '';
+  let studentLookupToken = 0;
+  let studentAutoTimer = null;
+  let studentMemoryVersion = '';
+  let studentProfileOwnerId = '';
+  const studentMemoryCache = new Map();
+  let inventoryRefreshBusy = false;
+  let inventoryLastRefreshMs = 0;
+  let reserveAvailabilityToken = 0;
+
+  window.addEventListener('load', () => {
+    loadInitialData();
+    const studentId = document.getElementById('studentId');
+    const phoneInput = document.getElementById('phone');
+
+    // 電話欄位只允許數字；保留 type=text，避免 0 開頭被瀏覽器吃掉。
+    if (phoneInput) {
+      phoneInput.addEventListener('input', () => {
+        const digits = phoneInput.value.replace(/\D+/g, '');
+        if (phoneInput.value !== digits) phoneInput.value = digits;
+      });
+    }
+
+    ['loanHistoryStudentId','reservationHistoryStudentId'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el)return;
+      el.addEventListener('keydown',e=>{
+        if(e.key!=='Enter')return;
+        e.preventDefault();
+        if(id==='loanHistoryStudentId')queryLoanHistory();
+        else queryReservationHistory();
+      });
+    });
+
+    studentId.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(studentAutoTimer);
+        lookupStudent(false);
+      }
+    });
+
+    // V2.3.62：學號 / 員編一變就先清除上一位使用者資料，
+    // 避免公用電腦把 A 的姓名 / 電話誤帶到 B。
+    studentId.addEventListener('input', () => {
+      clearTimeout(studentAutoTimer);
+      const id = studentId.value.trim();
+
+      invalidateStudentLookupForNewId(id);
+      syncHistoryIdentityFromBorrower(id, true);
+
+      // 教師 / 職員員編可能短於學生學號；4 碼以上、停止輸入 400ms 後自動查詢。
+      if (id.length >= 4) {
+        studentAutoTimer = setTimeout(() => lookupStudent(true), 400);
+      }
+    });
+
+    studentId.addEventListener('blur', () => {
+      clearTimeout(studentAutoTimer);
+      const id = studentId.value.trim();
+      if (id && id !== studentLookupLastId) lookupStudent(false);
+    });
+
+    // 從 LINE / Safari 切回頁面時，如果設備頁正在顯示且庫存超過 15 秒沒更新，做一次輕量更新。
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && state.assetTab === 'EQUIPMENT' && Date.now() - inventoryLastRefreshMs > 15000) {
+        refreshPublicAvailability(true);
+      }
+    });
+  });
+
+  function loadInitialData() {
+    setPageLoading(true);
+    google.script.run
+      .withSuccessHandler(data => {
+        state.data = data;
+        if (studentMemoryVersion !== String(data.studentCacheVersion || '')) {
+          studentMemoryCache.clear();
+          studentMemoryVersion = String(data.studentCacheVersion || '');
+        }
+        pruneSelections();
+        document.getElementById('systemName').textContent = data.systemName || '教室鑰匙與設備借用';
+        if (data.today) {
+          document.getElementById('reserveDate').min = data.today;
+          document.getElementById('reserveDate').value ||= data.today;
+        }
+        if (data.maxReservationDate) document.getElementById('reserveDate').max = data.maxReservationDate;
+        // 共用控制項先初始化；大量教室 / 設備卡片只 render 目前看得到的頁籤。
+        inventoryLastRefreshMs = Date.now();
+        document.getElementById('equipmentStockUpdatedAt').textContent = '庫存更新：剛剛';
+        renderReturnOptions();
+        renderReservationTimeSelects();
+        renderReservationReturnMethods();
+
+        if(state.mode==='BORROW')switchAssetTab(state.assetTab||'ROOM');
+        else if(state.mode==='RESERVE')switchReserveAssetTab(state.reserveAssetTab||'ROOM');
+
+        updateSelectedUI();
+        setPageLoading(false);
+      })
+      .withFailureHandler(err => { setPageLoading(false); showToast('載入失敗：' + (err.message || err), 'error'); })
+      .getBorrowPageData();
+  }
+
+  function reloadAssets() { showToast('正在更新最新庫存與借用狀態…', 'info'); loadInitialData(); }
+  function setPageLoading(v) { const btn = document.getElementById('submitBtn'); btn.disabled = v; btn.classList.toggle('opacity-50', v); }
+
+  // V2.4.9：黑名單提醒。blacklistedIds 記住本頁查到的黑名單學號，送出前再擋一次（後端也會擋）
+  const blacklistedIds = new Set();
+  function setBlacklistNotice(show) {
+    const box=document.getElementById('blacklistNotice');
+    if(box)box.classList.toggle('hidden', !show);
+  }
+
+  function clearBorrowerProfileFields() {
+    ['studentName','phone','department'].forEach(id => {
+      const el=document.getElementById(id);
+      if(el)el.value='';
+    });
+  }
+
+  function resetHistoryResultBox(type) {
+    const isLoan=type==='loan';
+    const box=document.getElementById(isLoan?'loanHistoryResult':'reservationHistoryResult');
+    if(!box)return;
+    box.innerHTML=`<div class="py-10 text-center text-xs text-slate-400">輸入學號 / 員編後查詢</div>`;
+  }
+
+  function syncHistoryIdentityFromBorrower(id, resetResults=false) {
+    const loanInput=document.getElementById('loanHistoryStudentId');
+    const reserveInput=document.getElementById('reservationHistoryStudentId');
+
+    if(loanInput && loanInput.value!==id) {
+      loanInput.value=id;
+      if(resetResults)resetHistoryResultBox('loan');
+    }
+    if(reserveInput && reserveInput.value!==id) {
+      reserveInput.value=id;
+      if(resetResults)resetHistoryResultBox('reservation');
+    }
+  }
+
+  function invalidateStudentLookupForNewId(id) {
+    if(id===studentProfileOwnerId || id===studentLookupLastId)return;
+
+    // 讓先前尚未回來的查詢結果失效。
+    studentLookupToken++;
+    studentLookupBusy=false;
+    studentLookupLastId='';
+
+    clearBorrowerProfileFields();
+    studentProfileOwnerId='';
+    setBlacklistNotice(false);
+
+    const status=document.getElementById('studentStatus');
+    if(status) {
+      status.textContent='';
+      status.className='mt-1.5 text-[11px] min-h-[16px] text-slate-400';
+    }
+  }
+
+  function lookupStudent(isAuto = false) {
+    const id = document.getElementById('studentId').value.trim();
+    const status = document.getElementById('studentStatus');
+    const btn = document.getElementById('studentSearchBtn');
+    if (!id) return;
+
+    // L1：本頁記憶體快取。同一位學生在同一個頁面再次輸入時完全不呼叫伺服器。
+    if (studentMemoryCache.has(id)) {
+      applyStudentResult(studentMemoryCache.get(id), id);
+      return;
+    }
+
+    if (studentLookupBusy && id === studentLookupLastId) return;
+
+    const token = ++studentLookupToken;
+    studentLookupBusy = true;
+    studentLookupLastId = id;
+    btn.disabled = true;
+    btn.textContent = isAuto ? '…' : '查詢中';
+    status.textContent = '查詢中…';
+    status.className = 'mt-1.5 text-[11px] min-h-[16px] text-slate-400';
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (token !== studentLookupToken) return;
+        studentLookupBusy = false;
+        btn.disabled = false;
+        btn.textContent = '查詢';
+
+        // 若伺服器回來時使用者已經改成另一個學號，不把舊資料塞回欄位。
+        if (document.getElementById('studentId').value.trim() !== id) return;
+
+        studentMemoryCache.set(id, res || { found: false });
+        applyStudentResult(res, id);
+      })
+      .withFailureHandler(() => {
+        if (token !== studentLookupToken) return;
+        studentLookupBusy = false;
+        btn.disabled = false;
+        btn.textContent = '查詢';
+        if (document.getElementById('studentId').value.trim() !== id) return;
+        status.textContent = '查詢失敗，仍可手動填寫';
+        status.className = 'mt-1.5 text-[11px] min-h-[16px] text-slate-400';
+      })
+      .findStudentV2(id);
+  }
+
+  function applyStudentResult(res, id) {
+    const status = document.getElementById('studentStatus');
+    studentLookupLastId = id;
+    studentProfileOwnerId = id;
+
+    // V2.4.9：黑名單 → 顯示紅色提醒
+    const isBlacklisted = !!(res && res.found && res.listStatus === '黑名單');
+    if (isBlacklisted) blacklistedIds.add(id); else blacklistedIds.delete(id);
+    setBlacklistNotice(isBlacklisted);
+
+    if (res && res.found) {
+      document.getElementById('studentName').value = res.name || '';
+      document.getElementById('department').value = res.department || '';
+      document.getElementById('phone').value = res.phone || '';
+      // 黑名單時不顯示綠色「已帶入」，避免與下方紅色提醒互相矛盾
+      status.innerHTML = isBlacklisted ? '' : licon('check','licon-sm') + ' 已帶入名冊資料（正式資料以名冊為準）';
+      status.className = 'mt-1.5 text-[11px] min-h-[16px] text-emerald-600 font-bold';
+    } else {
+      // 查無資料時再次清空，確保任何前一位使用者資料都不會殘留。
+      clearBorrowerProfileFields();
+      status.textContent = '名冊沒有資料，請直接手動填寫下方欄位';
+      status.className = 'mt-1.5 text-[11px] min-h-[16px] text-slate-400';
+    }
+  }
+
+  function switchMode(mode) {
+    state.mode = mode;
+
+    const borrow = mode === 'BORROW';
+    const reserve = mode === 'RESERVE';
+    const loanHistory = mode === 'LOAN_HISTORY';
+    const reservationHistory = mode === 'RESERVATION_HISTORY';
+    const formMode = borrow || reserve;
+
+    document.getElementById('borrowerSection').classList.toggle('hidden', !formMode);
+    document.getElementById('borrowFlow').classList.toggle('hidden', !borrow);
+    document.getElementById('reserveFlow').classList.toggle('hidden', !reserve);
+    document.getElementById('loanHistoryFlow').classList.toggle('hidden', !loanHistory);
+    document.getElementById('reservationHistoryFlow').classList.toggle('hidden', !reservationHistory);
+    document.getElementById('bottomBar').classList.toggle('hidden', !formMode);
+
+    const inactive='main-mode-tab rounded-xl px-1 py-2.5 font-black text-slate-500';
+    document.getElementById('modeBorrow').className = borrow
+      ? 'main-mode-tab rounded-xl px-1 py-2.5 font-black bg-white text-teal-700 shadow-sm'
+      : inactive;
+    document.getElementById('modeReserve').className = reserve
+      ? 'main-mode-tab rounded-xl px-1 py-2.5 font-black bg-white text-indigo-700 shadow-sm'
+      : inactive;
+    document.getElementById('modeLoanHistory').className = loanHistory
+      ? 'main-mode-tab rounded-xl px-1 py-2.5 font-black bg-white text-slate-800 shadow-sm'
+      : inactive;
+    document.getElementById('modeReservationHistory').className = reservationHistory
+      ? 'main-mode-tab rounded-xl px-1 py-2.5 font-black bg-white text-slate-800 shadow-sm'
+      : inactive;
+
+    if (formMode) {
+      document.getElementById('submitBtn').textContent = borrow ? '確認送出' : '確認預約';
+      document.getElementById('submitBtn').className = borrow
+        ? 'shrink-0 px-5 py-3 rounded-2xl bg-teal-600 text-white text-sm font-black shadow-lg shadow-teal-600/20 active:scale-95 transition'
+        : 'shrink-0 px-5 py-3 rounded-2xl bg-indigo-600 text-white text-sm font-black shadow-lg shadow-indigo-600/20 active:scale-95 transition';
+      document.getElementById('bottomLabel').textContent = borrow ? '目前已選' : '提前預約';
+
+      const borrowerStepBadge = document.getElementById('borrowerStepBadge');
+      if (borrowerStepBadge) {
+        borrowerStepBadge.classList.toggle('bg-teal-600', borrow);
+        borrowerStepBadge.classList.toggle('bg-indigo-600', reserve);
+      }
+
+      document.querySelectorAll('.borrower-mode-field').forEach(el => {
+        el.classList.toggle('focus:ring-teal-500', borrow);
+        el.classList.toggle('focus:ring-indigo-500', reserve);
+      });
+
+      if (borrow) switchAssetTab(state.assetTab || 'ROOM');
+      if (reserve) switchReserveAssetTab(state.reserveAssetTab || 'ROOM');
+      updateSelectedUI();
+      return;
+    }
+
+    // 公用電腦安全：只要借用人學號有值，紀錄頁一律同步目前這一位，
+    // 不保留上一位使用者的查詢學號。
+    const currentId=document.getElementById('studentId')?.value.trim()||'';
+    if(currentId)syncHistoryIdentityFromBorrower(currentId, false);
+  }
+
+  function switchAssetTab(tab) {
+    state.assetTab = tab;
+    const isRoom = tab === 'ROOM';
+    document.getElementById('roomPanel').classList.toggle('hidden', !isRoom);
+    document.getElementById('equipmentPanel').classList.toggle('hidden', isRoom);
+    document.getElementById('tabRoom').className = isRoom ? 'rounded-xl py-2.5 text-xs font-black bg-white text-teal-700 shadow-sm' : 'rounded-xl py-2.5 text-xs font-black text-slate-500';
+    document.getElementById('tabEquipment').className = !isRoom ? 'rounded-xl py-2.5 text-xs font-black bg-white text-teal-700 shadow-sm' : 'rounded-xl py-2.5 text-xs font-black text-slate-500';
+
+    if(!state.data)return;
+    if(isRoom){
+      renderRooms();
+    }else{
+      renderEquipmentCategories();
+      renderEquipments();
+      updateEquipmentStockSummary();
+      if(Date.now() - inventoryLastRefreshMs > 15000)refreshPublicAvailability(true);
+    }
+  }
+
+
+  function switchReserveAssetTab(tab) {
+    state.reserveAssetTab = tab;
+    const isRoom = tab === 'ROOM';
+    document.getElementById('reserveRoomPanel').classList.toggle('hidden', !isRoom);
+    document.getElementById('reserveEquipmentPanel').classList.toggle('hidden', isRoom);
+    document.getElementById('reserveTabRoom').className = isRoom
+      ? 'rounded-xl py-2.5 text-xs font-black bg-white text-indigo-700 shadow-sm'
+      : 'rounded-xl py-2.5 text-xs font-black text-slate-500';
+    document.getElementById('reserveTabEquipment').className = !isRoom
+      ? 'rounded-xl py-2.5 text-xs font-black bg-white text-indigo-700 shadow-sm'
+      : 'rounded-xl py-2.5 text-xs font-black text-slate-500';
+
+    if(!state.data)return;
+    if(isRoom){
+      renderReservationRooms();
+    }else{
+      renderReservationEquipmentCategories();
+      renderReservationEquipments();
+      if(reservationTimeReady() && state.reserveEquipmentAvailability.size === 0){
+        refreshReservationAvailability();
+      }
+    }
+  }
+
+  function historyStatusClass(status) {
+    if (status === '已結案' || status === '已完成') return 'bg-emerald-50 text-emerald-700';
+    if (status === '已取消') return 'bg-slate-100 text-slate-500';
+    if (status === '轉借異常') return 'bg-rose-50 text-rose-700';
+    if (status === '待歸還') return 'bg-amber-50 text-amber-700';
+    if (status === '借用中') return 'bg-teal-50 text-teal-700';
+    return 'bg-indigo-50 text-indigo-700';
+  }
+
+  function publicItemText(item) {
+    const qty = Number(item.loanQty ?? item.qty ?? 1);
+    const unit = item.unit || '';
+    return `${item.itemName || '借用品'}${qty > 1 ? ' ×' + qty + unit : ''}`;
+  }
+
+  function queryLoanHistory() {
+    const input=document.getElementById('loanHistoryStudentId');
+    const id=input.value.trim();
+    const btn=document.getElementById('loanHistorySearchBtn');
+    const box=document.getElementById('loanHistoryResult');
+
+    if(!id){
+      box.innerHTML='<div class="py-8 text-center text-xs text-rose-500 font-bold">請輸入學號 / 員編</div>';
+      return;
+    }
+
+    btn.disabled=true;
+    btn.textContent='查詢中';
+    box.innerHTML='<div class="py-10 text-center text-xs text-slate-400">讀取借用紀錄中…</div>';
+
+    google.script.run
+      .withSuccessHandler(res=>{
+        btn.disabled=false;
+        btn.textContent='查詢';
+        renderPublicLoanHistory(res);
+      })
+      .withFailureHandler(err=>{
+        btn.disabled=false;
+        btn.textContent='查詢';
+        box.innerHTML=`<div class="py-8 text-center text-xs text-rose-500 font-bold">查詢失敗：${escapeHtml(err.message||err)}</div>`;
+      })
+      .getPublicLoanHistoryByUserV2(id);
+  }
+
+  function renderPublicLoanHistory(res) {
+    const box=document.getElementById('loanHistoryResult');
+    if(!res?.success){
+      box.innerHTML=`<div class="py-8 text-center text-xs text-rose-500 font-bold">${escapeHtml(res?.message||'查詢失敗')}</div>`;
+      return;
+    }
+
+    const rows=res.records||[];
+    if(!rows.length){
+      box.innerHTML=`<div class="rounded-2xl bg-slate-50 py-10 text-center">
+        <p class="text-sm font-black text-slate-500">本月沒有借用紀錄</p>
+        <p class="mt-1 text-[11px] text-slate-400">${escapeHtml(res.month||'')}</p>
+      </div>`;
+      return;
+    }
+
+    box.innerHTML=`<div class="space-y-2">${rows.map(r=>{
+      const items=(r.items||[]).map(publicItemText).join('、')||'--';
+      return `<article class="rounded-2xl border border-slate-200 bg-white p-3">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-xs font-black text-slate-800">${escapeHtml(r.borrowAt||'--')}</p>
+            <p class="mt-1 text-[11px] text-slate-500 leading-relaxed">${escapeHtml(items)}</p>
+          </div>
+          <span class="shrink-0 px-2 py-1 rounded-lg text-[10px] font-black ${historyStatusClass(r.status)}">${escapeHtml(r.status||'--')}</span>
+        </div>
+        <div class="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-slate-400">
+          <p>預計歸還：<span class="text-slate-600 font-bold">${escapeHtml(r.expectedReturn||'--')}</span></p>
+          <p>歸還方式：<span class="text-slate-600 font-bold">${escapeHtml(r.returnMethod||'--')}</span></p>
+          ${r.closedAt&&r.closedAt!=='--'?`<p class="col-span-2">結案：<span class="text-slate-600 font-bold">${escapeHtml(r.closedAt)}</span></p>`:''}
+        </div>
+      </article>`;
+    }).join('')}</div>`;
+  }
+
+  function queryReservationHistory() {
+    const input=document.getElementById('reservationHistoryStudentId');
+    const id=input.value.trim();
+    const btn=document.getElementById('reservationHistorySearchBtn');
+    const box=document.getElementById('reservationHistoryResult');
+
+    if(!id){
+      box.innerHTML='<div class="py-8 text-center text-xs text-rose-500 font-bold">請輸入學號 / 員編</div>';
+      return;
+    }
+
+    btn.disabled=true;
+    btn.textContent='查詢中';
+    box.innerHTML='<div class="py-10 text-center text-xs text-slate-400">讀取預約紀錄中…</div>';
+
+    google.script.run
+      .withSuccessHandler(res=>{
+        btn.disabled=false;
+        btn.textContent='查詢';
+        renderPublicReservationHistory(res);
+      })
+      .withFailureHandler(err=>{
+        btn.disabled=false;
+        btn.textContent='查詢';
+        box.innerHTML=`<div class="py-8 text-center text-xs text-rose-500 font-bold">查詢失敗：${escapeHtml(err.message||err)}</div>`;
+      })
+      .getPublicReservationHistoryByUserV2(id);
+  }
+
+  function renderPublicReservationHistory(res) {
+    const box=document.getElementById('reservationHistoryResult');
+    if(!res?.success){
+      box.innerHTML=`<div class="py-8 text-center text-xs text-rose-500 font-bold">${escapeHtml(res?.message||'查詢失敗')}</div>`;
+      return;
+    }
+
+    const rows=res.records||[];
+    if(!rows.length){
+      box.innerHTML=`<div class="rounded-2xl bg-slate-50 py-10 text-center">
+        <p class="text-sm font-black text-slate-500">沒有可顯示的預約紀錄</p>
+        <p class="mt-1 text-[11px] text-slate-400">目前顯示當月歷史與未來預約</p>
+      </div>`;
+      return;
+    }
+
+    const future=rows.filter(r=>r.isFuture);
+    const history=rows.filter(r=>!r.isFuture);
+
+    const groupHtml=(title,list,accent)=>list.length?`
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-black ${accent}">${title}</p>
+          <span class="text-[10px] text-slate-400">${list.length} 筆</span>
+        </div>
+        <div class="space-y-2">
+          ${list.map(r=>{
+            const items=(r.items||[]).map(publicItemText).join('、')||'--';
+            return `<article class="rounded-2xl border border-slate-200 bg-white p-3">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <p class="text-xs font-black text-slate-800">${escapeHtml(r.useDate||'--')}　${escapeHtml(r.startTime||'--')}–${escapeHtml(r.endTime||'--')}</p>
+                  <p class="mt-1 text-[11px] text-slate-500 leading-relaxed">${escapeHtml(items)}</p>
+                </div>
+                <span class="shrink-0 px-2 py-1 rounded-lg text-[10px] font-black ${historyStatusClass(r.status)}">${escapeHtml(r.status||'--')}</span>
+              </div>
+              <div class="mt-2 pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+                <p>歸還方式：<span class="text-slate-600 font-bold">${escapeHtml(r.returnMethod||'--')}</span></p>
+                <p>歸還時間：<span class="text-slate-600 font-bold">${escapeHtml(r.returnTime||'--')}</span></p>
+              </div>
+            </article>`;
+          }).join('')}
+        </div>
+      </div>`:'';
+
+    box.innerHTML=`<div class="space-y-5">
+      ${groupHtml('未來預約',future,'text-indigo-700')}
+      ${groupHtml('本月歷史',history,'text-slate-700')}
+    </div>`;
+  }
+
+  function pruneSelections() {
+    if (!state.data) return;
+    const roomMap = new Map(state.data.rooms.map(r => [r.id, r]));
+    const eqMap = new Map(state.data.equipments.map(e => [e.id, e]));
+    [...state.roomKeyIds].forEach(id => { const r = roomMap.get(id); if (!r?.hasKey || !r?.keyAvailable) state.roomKeyIds.delete(id); });
+    [...state.remoteIds].forEach(id => { const r = roomMap.get(id); if (!r?.hasRemote || !r?.remoteAvailable) state.remoteIds.delete(id); });
+    [...state.equipmentQty.keys()].forEach(id => {
+      const e = eqMap.get(id);
+      if (!e || e.availableQty <= 0) state.equipmentQty.delete(id);
+      else state.equipmentQty.set(id, Math.min(state.equipmentQty.get(id), e.availableQty));
+    });
+    [...state.reserveRoomKeyIds].forEach(id => {
+      const r = roomMap.get(id);
+      if (!r || !r.hasKey) state.reserveRoomKeyIds.delete(id);
+    });
+    [...state.reserveRemoteIds].forEach(id => {
+      const r = roomMap.get(id);
+      if (!r || !r.hasRemote) state.reserveRemoteIds.delete(id);
+    });
+    [...state.reserveEquipmentQty.keys()].forEach(id => {
+      const e = eqMap.get(id);
+      if (!e || e.stockQty <= 0) state.reserveEquipmentQty.delete(id);
+      else state.reserveEquipmentQty.set(id, Math.min(state.reserveEquipmentQty.get(id), e.stockQty));
+    });
+  }
+
+  function renderRooms() {
+    if (!state.data) return;
+
+    const q = document.getElementById('roomSearch')?.value.trim().toLowerCase() || '';
+    const allRooms = state.data.rooms || [];
+    const floors = [...new Set(allRooms.map(r => String(r.floor || '未分類')))];
+    const tabs = ['全部', ...floors];
+
+    if (!tabs.includes(state.roomFloor)) state.roomFloor = '全部';
+
+    const floorTabs = document.getElementById('roomFloorTabs');
+    if (floorTabs) {
+      floorTabs.innerHTML = tabs.map(floor => {
+        const count = floor === '全部'
+          ? allRooms.length
+          : allRooms.filter(r => String(r.floor || '未分類') === floor).length;
+        const active = state.roomFloor === floor;
+
+        return `<button type="button"
+          data-floor="${escapeAttr(floor)}"
+          onclick="setRoomFloor(this.dataset.floor)"
+          class="floor-filter-btn shrink-0 px-3 py-2 rounded-xl font-black transition ${
+            active
+              ? 'bg-teal-600 text-white shadow-sm'
+              : 'bg-slate-100 text-slate-500'
+          }">
+          ${floor === '全部' ? '全部' : licon('building-2','licon-sm') + ' ' + escapeHtml(floor)}
+          <span class="${active ? 'text-white/70' : 'text-slate-400'} ml-1">${count}</span>
+        </button>`;
+      }).join('');
+    }
+
+    const filtered = allRooms.filter(room => {
+      if (state.roomFloor !== '全部' && String(room.floor || '未分類') !== state.roomFloor) return false;
+      if (q && !(`${room.floor} ${room.name}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+
+    const box = document.getElementById('roomList');
+    if (!box) return;
+
+    box.innerHTML = filtered.length
+      ? filtered.map(roomAssetRowHtml).join('')
+      : '<div class="text-center py-8 text-xs text-slate-400">找不到符合的教室</div>';
+  }
+
+  function setRoomFloor(floor) {
+    state.roomFloor = floor || '全部';
+    renderRooms();
+  }
+
+  function roomAssetRowHtml(room) {
+    return `<div class="rounded-2xl bg-slate-50/80 p-3">
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <p class="font-black text-sm truncate">${escapeHtml(room.name)}</p>
+          ${room.noLoan ? '<span class="shrink-0 text-[9px] text-rose-600 font-black">教室不外借</span>' : ''}
+        </div>
+        <span class="shrink-0 text-[10px] text-slate-400 font-bold">${escapeHtml(room.floor || '')}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        ${roomAssetButtonHtml('ROOM_KEY', room.id, licon('key-round') + ' ' + escapeHtml(state.data?.roomKeyLabel || '鑰匙'), room.hasKey, room.noLoan, room.keyAvailable, state.roomKeyIds.has(room.id))}
+        ${roomAirControlButtonHtml(room)}
+      </div>
+    </div>`;
+  }
+
+  function roomAssetButtonHtml(type, id, label, exists, noLoan, available, checked) {
+    const domId = 'room_' + type + '_' + safeDomId(id);
+
+    // 顯示優先：教室不外借 > 資產不存在 > 借出中 / 可借
+    let title = label;
+    let stateText = '';
+    let cardClass = '';
+    let stateClass = '';
+
+    if (noLoan) {
+      title = type === 'ROOM_KEY' ? licon('key-round') + ' 鑰匙不外借' : licon('air-vent') + ' 空調不外借';
+      cardClass = 'border-transparent bg-rose-50 text-rose-700 cursor-not-allowed';
+      stateClass = 'text-rose-600';
+    } else if (!exists) {
+      title = type === 'ROOM_KEY' ? licon('key-round') + ' 無鑰匙' : licon('air-vent') + ' 無遙控器';
+      cardClass = 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed';
+      stateClass = 'text-slate-400';
+    } else if (!available) {
+      stateText = '借出中';
+      cardClass = 'border-rose-100 bg-rose-50/40 cursor-not-allowed';
+      stateClass = 'text-rose-500';
+    } else {
+      stateText = '可借用';
+      cardClass = 'border-slate-200 bg-white cursor-pointer';
+      stateClass = 'text-emerald-600';
+    }
+
+    const disabled = noLoan || !exists || !available;
+
+    return `<div>
+      <input class="asset-input sr-only" type="checkbox" id="${domId}" data-type="${type}" data-id="${escapeAttr(id)}"
+        ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="handleRoomToggle(this)">
+      <label for="${domId}" class="relative min-h-[54px] rounded-xl border px-3 py-2.5 text-center transition ${cardClass} flex flex-col items-center justify-center">
+        <span class="check-dot absolute top-1.5 right-1.5 w-4 h-4 rounded-circle bg-teal-600 text-white text-[9px] flex items-center justify-center opacity-0 scale-75">${licon('check','licon-sm')}</span>
+        <p class="text-xs font-black">${title}</p>
+        ${stateText ? `<p class="mt-0.5 text-[9px] ${stateClass} font-bold">${stateText}</p>` : ''}
+      </label>
+    </div>`;
+  }
+
+  function roomAirControlButtonHtml(room) {
+    const mode = room.acControl || (room.hasRemote ? '遙控器' : '無空調');
+
+    if (room.noLoan) {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-transparent bg-slate-50 px-3 py-2.5 text-center text-rose-700 cursor-not-allowed flex items-center justify-center opacity-[.48]">
+          <p class="text-xs font-black">${licon('air-vent')} 空調不外借</p>
+        </div>
+      </div>`;
+    }
+
+    if (mode === '中控') {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-slate-500 cursor-default flex items-center justify-center">
+          <p class="text-xs font-black">${licon('air-vent')} 空調中控</p>
+        </div>
+      </div>`;
+    }
+
+    if (mode === '遙控器在內') {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-slate-500 cursor-default flex items-center justify-center">
+          <p class="text-xs font-black">${licon('air-vent')} 遙控器在內</p>
+        </div>
+      </div>`;
+    }
+
+    if (mode === '無空調') {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-slate-400 cursor-default flex items-center justify-center">
+          <p class="text-xs font-black">${licon('air-vent')} 無空調</p>
+        </div>
+      </div>`;
+    }
+
+    return roomAssetButtonHtml(
+      'AC_REMOTE',
+      room.id,
+      licon('air-vent') + ' ' + escapeHtml(state.data?.acRemoteLabel || '冷氣遙控器'),
+      room.hasRemote,
+      false,
+      room.remoteAvailable,
+      state.remoteIds.has(room.id)
+    );
+  }
+
+  function handleRoomToggle(el) {
+    const set = el.dataset.type === 'ROOM_KEY' ? state.roomKeyIds : state.remoteIds;
+    el.checked ? set.add(el.dataset.id) : set.delete(el.dataset.id);
+    updateSelectedUI();
+  }
+
+  function renderEquipmentCategories() {
+    if (!state.data) return;
+    const categories = ['全部', ...(state.data.equipmentCategories || [])];
+    if (!categories.includes(state.equipmentCategory)) state.equipmentCategory = '全部';
+    document.getElementById('equipmentCategories').innerHTML = categories.map(cat => `<button type="button" data-category="${escapeAttr(cat)}" onclick="setEquipmentCategory(this.dataset.category)" class="category-filter-btn shrink-0 px-3 py-1.5 rounded-full font-black ${state.equipmentCategory === cat ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}">${escapeHtml(cat)}</button>`).join('');
+  }
+  function setEquipmentCategory(cat) { state.equipmentCategory = cat; renderEquipmentCategories(); renderEquipments(); }
+
+  function renderEquipments() {
+    if (!state.data) return;
+    const q = document.getElementById('equipmentSearch')?.value.trim().toLowerCase() || '';
+    const list = state.data.equipments.filter(item => (state.equipmentCategory === '全部' || item.category === state.equipmentCategory) && (!q || `${item.category} ${item.displayName} ${item.id}`.toLowerCase().includes(q)));
+    const box = document.getElementById('equipmentList');
+    if (!list.length) { box.innerHTML = '<div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">找不到符合的設備</div>'; return; }
+    box.innerHTML = list.map(equipmentCardHtml).join('');
+  }
+
+  function equipmentCardHtml(item) {
+    const qty = state.equipmentQty.get(item.id) || 0;
+    const isQty = item.manageMode === '數量' || Number(item.stockQty || 0) > 1;
+    const unit = item.unit || '件';
+
+    if (!isQty) {
+      const domId = 'eq_' + safeDomId(item.id);
+      const stockText = item.available ? `可借 ${item.availableQty} / ${item.stockQty} ${unit}` : `可借 0 / ${item.stockQty} ${unit}`;
+      const stockClass = item.available ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
+      return `<div>
+        <input class="asset-input sr-only" type="checkbox" id="${domId}" data-id="${escapeAttr(item.id)}" ${qty > 0 ? 'checked' : ''} ${item.available ? '' : 'disabled'} onchange="toggleSingleEquipment(this)">
+        <label for="${domId}" class="relative block min-h-[100px] rounded-2xl border ${item.available ? 'border-slate-200 bg-white cursor-pointer' : 'border-rose-100 bg-rose-50/40 cursor-not-allowed'} px-3 py-3 transition">
+          <span class="check-dot absolute top-2 right-2 w-5 h-5 rounded-circle bg-teal-600 text-white text-[10px] flex items-center justify-center opacity-0 scale-75">${licon('check','licon-sm')}</span>
+          <div class="pr-6">
+            <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
+            <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.category)}</p>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-[9px] px-2 py-1 rounded-full ${stockClass} font-black">${stockText}</span>
+            <span class="text-[10px] ${item.available ? 'text-emerald-600' : 'text-rose-600'} font-black">${item.available ? '現在可借' : '目前無法借出'}</span>
+          </div>
+        </label>
+      </div>`;
+    }
+
+    const noStock = item.availableQty <= 0;
+    const low = !noStock && item.availableQty <= item.lowStock;
+    const badgeClass = noStock ? 'bg-rose-100 text-rose-700' : (low ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700');
+    const cardClass = noStock ? 'border-rose-100 bg-rose-50/40' : (qty > 0 ? 'border-teal-500 bg-teal-50/40' : 'border-slate-200 bg-white');
+    const stateText = noStock ? '目前無庫存' : (low ? '庫存較少' : '現在可借');
+
+    return `<div class="rounded-2xl border ${cardClass} p-3">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
+          <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.category)}</p>
+        </div>
+        <span class="shrink-0 text-[9px] px-2 py-1 rounded-full ${badgeClass} font-black">可借 ${item.availableQty} / ${item.stockQty} ${escapeHtml(unit)}</span>
+      </div>
+      <div class="mt-2 flex items-center justify-between text-[10px]">
+        <span class="text-slate-400">已借出 ${item.borrowedQty}${escapeHtml(unit)}</span>
+        <span class="${noStock ? 'text-rose-600' : (low ? 'text-amber-700' : 'text-emerald-600')} font-black">${stateText}</span>
+      </div>
+      <div class="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div class="h-full rounded-full ${noStock ? 'bg-rose-400' : (low ? 'bg-amber-400' : 'bg-emerald-500')}" style="width:${item.stockQty > 0 ? Math.max(0, Math.min(100, item.availableQty / item.stockQty * 100)) : 0}%"></div>
+      </div>
+      <div class="mt-3 flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 p-1.5 ${noStock ? 'opacity-50' : ''}">
+        <button type="button" data-id="${escapeAttr(item.id)}" onclick="changeEquipmentQty(this.dataset.id,-1)" class="w-9 h-9 rounded-lg bg-white border border-slate-200 font-black text-slate-600 inline-flex items-center justify-center" aria-label="減少">${licon('minus')}</button>
+        <div class="text-center"><p class="text-lg font-black ${qty ? 'text-teal-700' : 'text-slate-500'}">${qty}</p><p class="text-[9px] text-slate-400">${escapeHtml(unit)}</p></div>
+        <button type="button" data-id="${escapeAttr(item.id)}" onclick="changeEquipmentQty(this.dataset.id,1)" ${item.availableQty <= qty || noStock ? 'disabled' : ''} class="w-9 h-9 rounded-lg bg-white border border-slate-200 font-black text-slate-600 disabled:opacity-30 inline-flex items-center justify-center" aria-label="增加">${licon('plus')}</button>
+      </div>
+    </div>`;
+  }
+
+  function updateEquipmentStockSummary() {
+    if (!state.data) return;
+    const list = state.data.equipments || [];
+    const availableTypes = list.filter(e => e.availableQty > 0).length;
+    const unavailableTypes = list.length - availableTypes;
+    const lowTypes = list.filter(e => e.manageMode === '數量' && e.availableQty > 0 && e.availableQty <= e.lowStock).length;
+    const parts = [`可借 ${availableTypes} 種 / 共 ${list.length} 種`];
+    if (unavailableTypes > 0) parts.push(`${unavailableTypes} 種目前借完`);
+    if (lowTypes > 0) parts.push(`${lowTypes} 種庫存較少`);
+    const el = document.getElementById('equipmentStockSummary');
+    if (el) el.textContent = parts.join(' · ');
+  }
+
+  function refreshPublicAvailability(silent = false) {
+    if (!state.data || inventoryRefreshBusy) return;
+    inventoryRefreshBusy = true;
+    const btn = document.getElementById('inventoryRefreshBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
+
+    google.script.run
+      .withSuccessHandler(fresh => {
+        inventoryRefreshBusy = false;
+        inventoryLastRefreshMs = Date.now();
+        if (btn) { btn.disabled = false; btn.innerHTML = licon('refresh-cw','licon-sm') + ' 更新庫存'; }
+
+        const roomFresh = new Map((fresh.rooms || []).map(r => [r.id, r]));
+        const equipmentFresh = new Map((fresh.equipments || []).map(e => [e.id, e]));
+
+        state.data.rooms = (state.data.rooms || []).map(room => {
+          const f = roomFresh.get(room.id);
+          return f ? {
+            ...room,
+            hasKey: f.hasKey,
+            hasRemote: f.hasRemote,
+            noLoan: f.noLoan,
+            acControl: f.acControl,
+            keyAvailable: f.keyAvailable,
+            remoteAvailable: f.remoteAvailable
+          } : room;
+        });
+        state.data.equipments = (state.data.equipments || []).map(item => {
+          const f = equipmentFresh.get(item.id);
+          return f ? { ...item, stockQty: f.stockQty, borrowedQty: f.borrowedQty, availableQty: f.availableQty, available: f.available } : item;
+        });
+
+        pruneSelections();
+        renderRooms();
+        renderEquipments();
+        renderReservationRooms();
+        renderReservationEquipments();
+        updateEquipmentStockSummary();
+        updateSelectedUI();
+        const updated = document.getElementById('equipmentStockUpdatedAt');
+        if (updated) updated.textContent = '庫存更新：' + (fresh.generatedAt || '剛剛');
+        if (!silent) showToast('庫存已更新', 'success');
+      })
+      .withFailureHandler(err => {
+        inventoryRefreshBusy = false;
+        if (btn) { btn.disabled = false; btn.innerHTML = licon('refresh-cw','licon-sm') + ' 更新庫存'; }
+        if (!silent) showToast('庫存更新失敗：' + (err.message || err), 'error');
+      })
+      .getPublicAvailabilityV2();
+  }
+
+  function toggleSingleEquipment(el) { el.checked ? state.equipmentQty.set(el.dataset.id, 1) : state.equipmentQty.delete(el.dataset.id); updateSelectedUI(); }
+  function changeEquipmentQty(id, delta) {
+    const item = state.data.equipments.find(e => e.id === id); if (!item) return;
+    let qty = (state.equipmentQty.get(id) || 0) + delta;
+    qty = Math.max(0, Math.min(item.availableQty, qty));
+    qty ? state.equipmentQty.set(id, qty) : state.equipmentQty.delete(id);
+    renderEquipments(); updateSelectedUI();
+  }
+
+  function renderReturnOptions() {
+    if (!state.data) return;
+    document.getElementById('returnOptions').innerHTML = (state.data.returnOptions || []).map(option => `<button type="button" data-value="${escapeAttr(option)}" onclick="selectReturnTime(this.dataset.value)" class="rounded-2xl border px-3 py-3 text-xs font-black transition ${state.returnTime === option ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-600'}">${escapeHtml(option)}</button>`).join('');
+  }
+  function selectReturnTime(v) { state.returnTime = v; renderReturnOptions(); }
+
+  function renderReservationRooms() {
+    if (!state.data) return;
+
+    const q = document.getElementById('reserveRoomSearch')?.value.trim().toLowerCase() || '';
+    const allRooms = state.data.rooms || [];
+    const floors = [...new Set(allRooms.map(r => String(r.floor || '未分類')))];
+    const tabs = ['全部', ...floors];
+
+    if (!tabs.includes(state.reserveRoomFloor)) state.reserveRoomFloor = '全部';
+
+    const floorTabs = document.getElementById('reserveRoomFloorTabs');
+    if (floorTabs) {
+      floorTabs.innerHTML = tabs.map(floor => {
+        const count = floor === '全部'
+          ? allRooms.length
+          : allRooms.filter(r => String(r.floor || '未分類') === floor).length;
+        const active = state.reserveRoomFloor === floor;
+
+        return `<button type="button"
+          data-floor="${escapeAttr(floor)}"
+          onclick="setReserveRoomFloor(this.dataset.floor)"
+          class="floor-filter-btn shrink-0 px-3 py-2 rounded-xl font-black transition ${
+            active
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'bg-slate-100 text-slate-500'
+          }">
+          ${floor === '全部' ? '全部' : licon('building-2','licon-sm') + ' ' + escapeHtml(floor)}
+          <span class="${active ? 'text-white/70' : 'text-slate-400'} ml-1">${count}</span>
+        </button>`;
+      }).join('');
+    }
+
+    const filtered = allRooms.filter(room => {
+      if (state.reserveRoomFloor !== '全部' && String(room.floor || '未分類') !== state.reserveRoomFloor) return false;
+      if (q && !(`${room.floor} ${room.name}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+
+    const box = document.getElementById('reserveRoomList');
+    if (!box) return;
+
+    box.innerHTML = filtered.length
+      ? filtered.map(reservationRoomAssetRowHtml).join('')
+      : '<div class="text-center py-8 text-xs text-slate-400">找不到符合的教室</div>';
+  }
+
+  function setReserveRoomFloor(floor) {
+    state.reserveRoomFloor = floor || '全部';
+    renderReservationRooms();
+  }
+
+  function reservationRoomAssetRowHtml(room) {
+    return `<div class="rounded-2xl bg-slate-50/80 p-3">
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <p class="font-black text-sm truncate">${escapeHtml(room.name)}</p>
+          ${room.noLoan ? '<span class="shrink-0 text-[9px] text-rose-600 font-black">教室不外借</span>' : ''}
+        </div>
+        <span class="shrink-0 text-[10px] text-slate-400 font-bold">${escapeHtml(room.floor || '')}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        ${reservationRoomAssetButtonHtml('ROOM_KEY', room.id, licon('key-round') + ' ' + escapeHtml(state.data?.roomKeyLabel || '鑰匙'), room.hasKey, room.noLoan, state.reserveRoomKeyIds.has(room.id))}
+        ${reservationRoomAirControlHtml(room)}
+      </div>
+    </div>`;
+  }
+
+  function reservationRoomAirControlHtml(room) {
+    const mode = room.acControl || (room.hasRemote ? '遙控器' : '無空調');
+
+    if (room.noLoan) {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-transparent bg-slate-50 px-3 py-2.5 text-center text-rose-700 cursor-not-allowed flex items-center justify-center opacity-[.48]">
+          <p class="text-xs font-black">${licon('air-vent')} 空調不外借</p>
+        </div>
+      </div>`;
+    }
+
+    if (mode === '中控') {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-slate-500 cursor-default flex items-center justify-center">
+          <p class="text-xs font-black">${licon('air-vent')} 空調中控</p>
+        </div>
+      </div>`;
+    }
+
+    if (mode === '遙控器在內') {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-slate-500 cursor-default flex items-center justify-center">
+          <p class="text-xs font-black">${licon('air-vent')} 遙控器在內</p>
+        </div>
+      </div>`;
+    }
+
+    if (mode === '無空調') {
+      return `<div>
+        <div class="relative min-h-[54px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-slate-400 cursor-default flex items-center justify-center">
+          <p class="text-xs font-black">${licon('air-vent')} 無空調</p>
+        </div>
+      </div>`;
+    }
+
+    return reservationRoomAssetButtonHtml(
+      'AC_REMOTE',
+      room.id,
+      licon('air-vent') + ' ' + escapeHtml(state.data?.acRemoteLabel || '冷氣遙控器'),
+      room.hasRemote,
+      false,
+      state.reserveRemoteIds.has(room.id)
+    );
+  }
+
+  function reservationRoomAssetButtonHtml(type, roomId, label, exists, noLoan, checked) {
+    const ready = reservationTimeReady();
+    const roomAvailability = state.reserveRoomAvailability.get(roomId);
+    const timeAvailable = !ready || roomAvailability !== false;
+
+    let title = label;
+    let stateText = '';
+    let cardClass = '';
+    let stateClass = '';
+
+    if (noLoan) {
+      title = type === 'ROOM_KEY' ? licon('key-round') + ' 鑰匙不外借' : licon('air-vent') + ' 空調不外借';
+      cardClass = 'border-transparent bg-rose-50 text-rose-700 cursor-not-allowed';
+      stateClass = 'text-rose-600';
+    } else if (!exists) {
+      title = type === 'ROOM_KEY' ? licon('key-round') + ' 無鑰匙' : licon('air-vent') + ' 無遙控器';
+      cardClass = 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed';
+      stateClass = 'text-slate-400';
+    } else if (!timeAvailable && !checked) {
+      stateText = '時段已預約';
+      cardClass = 'border-rose-100 bg-rose-50/40 cursor-not-allowed';
+      stateClass = 'text-rose-500';
+    } else {
+      stateText = '可預約';
+      cardClass = 'border-slate-200 bg-white cursor-pointer';
+      stateClass = 'text-emerald-600';
+    }
+
+    const domId = 'reserve_' + type + '_' + safeDomId(roomId);
+    const disabled = noLoan || !exists || (!timeAvailable && !checked);
+
+    return `<div>
+      <input class="reserve-asset-input sr-only" type="checkbox" id="${domId}"
+        data-type="${type}" data-id="${escapeAttr(roomId)}"
+        ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
+        onchange="handleReserveRoomToggle(this)">
+      <label for="${domId}" class="relative min-h-[54px] rounded-xl border px-3 py-2.5 text-center transition ${cardClass} flex flex-col items-center justify-center">
+        <span class="check-dot absolute top-1.5 right-1.5 w-4 h-4 rounded-circle bg-indigo-600 text-white text-[9px] flex items-center justify-center opacity-0 scale-75">${licon('check','licon-sm')}</span>
+        <p class="text-xs font-black">${title}</p>
+        ${stateText ? `<p class="mt-0.5 text-[9px] ${stateClass} font-bold">${stateText}</p>` : ''}
+      </label>
+    </div>`;
+  }
+
+  function handleReserveRoomToggle(el) {
+    const set = el.dataset.type === 'ROOM_KEY' ? state.reserveRoomKeyIds : state.reserveRemoteIds;
+    el.checked ? set.add(el.dataset.id) : set.delete(el.dataset.id);
+    updateSelectedUI();
+  }
+
+  function renderReservationReturnMethods() {
+    if (!state.data) return;
+
+    const methodSelect = document.getElementById('reserveReturnMethod');
+    if (methodSelect) {
+      const currentMethod = methodSelect.value;
+      const methods = state.data.reservationReturnMethods || [];
+      methodSelect.innerHTML = '<option value="">請選擇</option>' +
+        methods.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+      if (currentMethod && methods.includes(currentMethod)) methodSelect.value = currentMethod;
+    }
+
+    // 歸還時間與立即借用共用「設定」分頁的 RETURN_OPTIONS。
+    const timeSelect = document.getElementById('reserveReturnTime');
+    if (timeSelect) {
+      const currentTime = timeSelect.value;
+      const options = state.data.returnOptions || [];
+      timeSelect.innerHTML = '<option value="">請選擇</option>' +
+        options.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+      if (currentTime && options.includes(currentTime)) timeSelect.value = currentTime;
+    }
+  }
+
+  function reservationTimeReady() {
+    const d = document.getElementById('reserveDate')?.value;
+    const s = document.getElementById('reserveStart')?.value;
+    const e = document.getElementById('reserveEnd')?.value;
+    return !!(d && s && e && s < e);
+  }
+
+  function renderReservationEquipmentCategories() {
+    if (!state.data) return;
+    const cats = ['全部', ...(state.data.equipmentCategories || [])];
+    if (!cats.includes(state.reserveEquipmentCategory)) state.reserveEquipmentCategory = '全部';
+    document.getElementById('reserveEquipmentCategories').innerHTML = cats.map(cat =>
+      `<button type="button" data-category="${escapeAttr(cat)}" onclick="setReserveEquipmentCategory(this.dataset.category)"
+        class="category-filter-btn shrink-0 px-3 py-1.5 rounded-full font-black ${state.reserveEquipmentCategory === cat ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}">${escapeHtml(cat)}</button>`
+    ).join('');
+  }
+
+  function setReserveEquipmentCategory(cat) {
+    state.reserveEquipmentCategory = cat;
+    renderReservationEquipmentCategories();
+    renderReservationEquipments();
+  }
+
+  function renderReservationEquipments() {
+    if (!state.data) return;
+    const q = document.getElementById('reserveEquipmentSearch')?.value.trim().toLowerCase() || '';
+    const list = state.data.equipments.filter(item =>
+      (state.reserveEquipmentCategory === '全部' || item.category === state.reserveEquipmentCategory) &&
+      (!q || `${item.category} ${item.displayName} ${item.id}`.toLowerCase().includes(q))
+    );
+    const box = document.getElementById('reserveEquipmentList');
+    if (!list.length) {
+      box.innerHTML = '<div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">找不到符合的設備</div>';
+      return;
+    }
+    box.innerHTML = list.map(reservationEquipmentCardHtml).join('');
+  }
+
+  function reservationEquipmentCardHtml(item) {
+    const qty = state.reserveEquipmentQty.get(item.id) || 0;
+    const ready = reservationTimeReady();
+    const future = state.reserveEquipmentAvailability.get(item.id);
+    const availableQty = ready ? (future?.availableQty ?? 0) : Math.max(0, Number(item.stockQty || 0));
+    const isQty = item.manageMode === '數量' || Number(item.stockQty || 0) > 1;
+    const unit = item.unit || '件';
+
+    if (!isQty) {
+      const domId = 'reserve_eq_' + safeDomId(item.id);
+      const available = availableQty > 0;
+      const badgeText = ready ? `可預約 ${availableQty} / ${item.stockQty} ${unit}` : `總庫存 ${item.stockQty} ${unit}`;
+      const badgeClass = available ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700';
+      const disabled = !available && qty <= 0;
+      return `<div>
+        <input class="reserve-asset-input sr-only" type="checkbox" id="${domId}" data-id="${escapeAttr(item.id)}"
+          ${qty > 0 ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="toggleSingleReservationEquipment(this)">
+        <label for="${domId}" class="relative block min-h-[100px] rounded-2xl border ${available || qty > 0 ? 'border-slate-200 bg-white cursor-pointer' : 'border-rose-100 bg-rose-50/40 cursor-not-allowed'} px-3 py-3 transition">
+          <span class="check-dot absolute top-2 right-2 w-5 h-5 rounded-circle bg-indigo-600 text-white text-[10px] flex items-center justify-center opacity-0 scale-75">${licon('check','licon-sm')}</span>
+          <div class="pr-6">
+            <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
+            <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.category)}</p>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span class="text-[9px] px-2 py-1 rounded-full ${badgeClass} font-black">${escapeHtml(badgeText)}</span>
+            <span class="text-[10px] ${available ? 'text-indigo-600' : 'text-rose-600'} font-black">${ready ? (available ? '該時段可預約' : '該時段已滿') : '選時段後確認'}</span>
+          </div>
+        </label>
+      </div>`;
+    }
+
+    const noStock = availableQty <= 0;
+    const badgeClass = noStock ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700';
+    const cardClass = noStock && qty <= 0 ? 'border-rose-100 bg-rose-50/40' : (qty > 0 ? 'border-indigo-500 bg-indigo-50/40' : 'border-slate-200 bg-white');
+    const badgeText = ready ? `可預約 ${availableQty} / ${item.stockQty} ${unit}` : `總庫存 ${item.stockQty} ${unit}`;
+
+    return `<div class="rounded-2xl border ${cardClass} p-3">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
+          <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.category)}</p>
+        </div>
+        <span class="shrink-0 text-[9px] px-2 py-1 rounded-full ${badgeClass} font-black">${escapeHtml(badgeText)}</span>
+      </div>
+      <div class="mt-2 flex items-center justify-between text-[10px]">
+        <span class="text-slate-400">${ready ? '依預約時段計算' : '尚未選擇時段'}</span>
+        <span class="${noStock ? 'text-rose-600' : 'text-indigo-600'} font-black">${ready ? (noStock ? '該時段已滿' : '該時段可預約') : '選時段後確認'}</span>
+      </div>
+      <div class="mt-3 flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 p-1.5 ${noStock && qty <= 0 ? 'opacity-50' : ''}">
+        <button type="button" data-id="${escapeAttr(item.id)}" onclick="changeReservationEquipmentQty(this.dataset.id,-1)" class="w-9 h-9 rounded-lg bg-white border border-slate-200 font-black text-slate-600 inline-flex items-center justify-center" aria-label="減少">${licon('minus')}</button>
+        <div class="text-center"><p class="text-lg font-black ${qty ? 'text-indigo-700' : 'text-slate-500'}">${qty}</p><p class="text-[9px] text-slate-400">${escapeHtml(unit)}</p></div>
+        <button type="button" data-id="${escapeAttr(item.id)}" onclick="changeReservationEquipmentQty(this.dataset.id,1)"
+          ${availableQty <= qty || noStock ? 'disabled' : ''} class="w-9 h-9 rounded-lg bg-white border border-slate-200 font-black text-slate-600 disabled:opacity-30 inline-flex items-center justify-center" aria-label="增加">${licon('plus')}</button>
+      </div>
+    </div>`;
+  }
+
+  function toggleSingleReservationEquipment(el) {
+    el.checked ? state.reserveEquipmentQty.set(el.dataset.id, 1) : state.reserveEquipmentQty.delete(el.dataset.id);
+    updateSelectedUI();
+  }
+
+  function changeReservationEquipmentQty(id, delta) {
+    const item = state.data?.equipments.find(e => e.id === id);
+    if (!item) return;
+    const ready = reservationTimeReady();
+    const future = state.reserveEquipmentAvailability.get(id);
+    const max = ready ? (future?.availableQty || 0) : Math.max(0, Number(item.stockQty || 0));
+    let qty = (state.reserveEquipmentQty.get(id) || 0) + delta;
+    qty = Math.max(0, Math.min(max, qty));
+    qty ? state.reserveEquipmentQty.set(id, qty) : state.reserveEquipmentQty.delete(id);
+    renderReservationEquipments();
+    updateSelectedUI();
+  }
+
+  function refreshReservationAvailability(showMessage = false) {
+    const status = document.getElementById('reserveEquipmentStatus');
+    const btn = document.getElementById('reserveInventoryRefreshBtn');
+
+    if (!reservationTimeReady()) {
+      state.reserveEquipmentAvailability.clear();
+      state.reserveRoomAvailability.clear();
+      if (status) status.textContent = '選擇第 3 項時段後會自動確認可預約數量';
+      if (btn) { btn.disabled = false; btn.innerHTML = licon('refresh-cw','licon-sm') + ' 更新'; }
+      renderReservationRooms();
+      renderReservationEquipments();
+      updateSelectedUI();
+      if (showMessage) showToast('請先完整選擇使用日期與開始、結束時間。', 'info');
+      return;
+    }
+
+    const token = ++reserveAvailabilityToken;
+    if (status) status.textContent = '查詢該時段可預約狀態…';
+    if (btn) { btn.disabled = true; btn.textContent = '查詢中…'; }
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (token !== reserveAvailabilityToken) return;
+
+        state.reserveEquipmentAvailability.clear();
+        state.reserveRoomAvailability.clear();
+
+        (res?.equipments || []).forEach(e => state.reserveEquipmentAvailability.set(e.id, e));
+        (res?.rooms || []).forEach(r => state.reserveRoomAvailability.set(r.id, !!r.available));
+
+        // V2.3.62：使用者可能先勾教室、再選時段。
+        // 一旦該時段衝突，立即把該教室的鑰匙 / 遙控器從已選項目移除。
+        const removedRoomIds = new Set();
+        [...state.reserveRoomKeyIds].forEach(id => {
+          if(state.reserveRoomAvailability.get(id)===false){
+            state.reserveRoomKeyIds.delete(id);
+            removedRoomIds.add(id);
+          }
+        });
+        [...state.reserveRemoteIds].forEach(id => {
+          if(state.reserveRoomAvailability.get(id)===false){
+            state.reserveRemoteIds.delete(id);
+            removedRoomIds.add(id);
+          }
+        });
+
+        let adjusted = false;
+        [...state.reserveEquipmentQty.keys()].forEach(id => {
+          const max = state.reserveEquipmentAvailability.get(id)?.availableQty || 0;
+          const oldQty = state.reserveEquipmentQty.get(id) || 0;
+          const q = Math.min(oldQty, max);
+          if (q !== oldQty) adjusted = true;
+          q ? state.reserveEquipmentQty.set(id, q) : state.reserveEquipmentQty.delete(id);
+        });
+
+        if (status) status.textContent = '已更新此時段可預約狀態';
+        if (btn) { btn.disabled = false; btn.innerHTML = licon('refresh-cw','licon-sm') + ' 更新'; }
+        renderReservationRooms();
+        renderReservationEquipments();
+        updateSelectedUI();
+
+        if(removedRoomIds.size){
+          const names=[...removedRoomIds].map(id=>state.data.rooms.find(r=>r.id===id)?.name||id);
+          const suffix=adjusted?'；設備數量也已同步調整':'';
+          showToast('時段衝突，已取消選取：'+names.join('、')+suffix, 'info');
+        }else if(adjusted){
+          showToast('部分設備數量已依該時段可預約庫存自動調整。', 'info');
+        }else if(showMessage){
+          showToast('預約時段狀態已更新。', 'success');
+        }
+      })
+      .withFailureHandler(() => {
+        if (token !== reserveAvailabilityToken) return;
+        if (status) status.textContent = '無法取得時段庫存，請稍後再試';
+        if (btn) { btn.disabled = false; btn.innerHTML = licon('refresh-cw','licon-sm') + ' 更新'; }
+      })
+      .getReservationAvailabilityV2({
+        useDate: document.getElementById('reserveDate').value,
+        startTime: document.getElementById('reserveStart').value,
+        endTime: document.getElementById('reserveEnd').value
+      });
+  }
+
+  function selectedItems() {
+    if (!state.data) return [];
+    const roomMap = new Map(state.data.rooms.map(r => [r.id, r]));
+    const eqMap = new Map(state.data.equipments.map(e => [e.id, e]));
+    const items = [];
+    const keyLabel=state.data?.roomKeyLabel||'鑰匙';
+    const remoteLabel=state.data?.acRemoteLabel||'冷氣遙控器';
+    state.roomKeyIds.forEach(id => { const r = roomMap.get(id); if (r) items.push({ type:'ROOM_KEY', id, name:r.name + ' ' + keyLabel, qty:1, unit:'把' }); });
+    state.remoteIds.forEach(id => { const r = roomMap.get(id); if (r) items.push({ type:'AC_REMOTE', id, name:r.name + ' ' + remoteLabel, qty:1, unit:'支' }); });
+    state.equipmentQty.forEach((qty,id) => { const e = eqMap.get(id); if (e && qty > 0) items.push({ type:'EQUIPMENT', id, name:e.displayName, qty, unit:e.unit }); });
+    return items;
+  }
+
+  function reservationSelectedItems() {
+    if (!state.data) return [];
+    const roomMap = new Map(state.data.rooms.map(r => [r.id, r]));
+    const eqMap = new Map(state.data.equipments.map(e => [e.id, e]));
+    const items = [];
+    const keyLabel=state.data?.roomKeyLabel||'鑰匙';
+    const remoteLabel=state.data?.acRemoteLabel||'冷氣遙控器';
+    state.reserveRoomKeyIds.forEach(id => { const r = roomMap.get(id); if (r) items.push({ type:'ROOM_KEY', id, name:r.name + ' ' + keyLabel, qty:1, unit:'把' }); });
+    state.reserveRemoteIds.forEach(id => { const r = roomMap.get(id); if (r) items.push({ type:'AC_REMOTE', id, name:r.name + ' ' + remoteLabel, qty:1, unit:'支' }); });
+    state.reserveEquipmentQty.forEach((qty,id) => { const e = eqMap.get(id); if (e && qty > 0) items.push({ type:'EQUIPMENT', id, name:e.displayName, qty, unit:e.unit }); });
+    return items;
+  }
+
+  function updateSelectedUI() {
+    if (state.mode === 'RESERVE') {
+      const items = reservationSelectedItems();
+      const units = items.reduce((sum, item) => sum + item.qty, 0);
+      const reserveCount = document.getElementById('reserveSelectedCount');
+      if (reserveCount) reserveCount.textContent = `${items.length} 種 / ${units} 件`;
+      document.getElementById('selectedSummary').textContent = items.length
+        ? items.map(i => i.qty > 1 ? `${i.name}×${i.qty}` : i.name).join('、')
+        : '尚未選擇預約借用品';
+      return;
+    }
+
+    const items = selectedItems();
+    const units = items.reduce((s,i) => s + i.qty, 0);
+    document.getElementById('selectedCount').textContent = `${items.length} 種 / ${units} 件`;
+    document.getElementById('selectedSummary').textContent = items.length ? items.map(i => i.qty > 1 ? `${i.name}×${i.qty}` : i.name).join('、') : '尚未選擇借用品';
+  }
+
+
+  function renderReservationTimeSelects(preserveValues = true) {
+    if (!state.data) return;
+
+    const options = state.data.reservationTimeOptions || [];
+    const startSelect = document.getElementById('reserveStart');
+    const endSelect = document.getElementById('reserveEnd');
+    if (!startSelect || !endSelect) return;
+
+    const oldStart = preserveValues ? startSelect.value : '';
+    const oldEnd = preserveValues ? endSelect.value : '';
+
+    // 最後一個時間只能當結束時間，避免選了開始後沒有任何可選的結束時間。
+    const startOptions = options.slice(0, Math.max(0, options.length - 1));
+    startSelect.innerHTML = '<option value="">請選擇</option>' + startOptions.map(time =>
+      `<option value="${escapeAttr(time)}">${escapeHtml(time)}</option>`
+    ).join('');
+
+    if (oldStart && startOptions.includes(oldStart)) {
+      startSelect.value = oldStart;
+    } else {
+      startSelect.value = '';
+    }
+
+    renderReserveEndOptions(oldEnd);
+  }
+
+  function renderReserveEndOptions(preferredValue = '') {
+    const options = state.data?.reservationTimeOptions || [];
+    const startSelect = document.getElementById('reserveStart');
+    const endSelect = document.getElementById('reserveEnd');
+    if (!startSelect || !endSelect) return;
+
+    const start = startSelect.value;
+    if (!start) {
+      endSelect.innerHTML = '<option value="">先選開始時間</option>';
+      endSelect.value = '';
+      endSelect.disabled = true;
+      return;
+    }
+
+    const endOptions = options.filter(time => time > start);
+    endSelect.disabled = false;
+    endSelect.innerHTML = '<option value="">請選擇</option>' + endOptions.map(time =>
+      `<option value="${escapeAttr(time)}">${escapeHtml(time)}</option>`
+    ).join('');
+
+    if (preferredValue && endOptions.includes(preferredValue)) {
+      endSelect.value = preferredValue;
+    } else {
+      endSelect.value = '';
+    }
+  }
+
+  function onReserveStartChange() {
+    const currentEnd = document.getElementById('reserveEnd').value;
+    renderReserveEndOptions(currentEnd);
+    refreshReservationAvailability();
+  }
+
+  function onReserveEndChange() { refreshReservationAvailability(); }
+
+  function resetReserveTimePicker() {
+    renderReservationTimeSelects(false);
+  }
+
+  function commonPayload() { return { studentId:document.getElementById('studentId').value.trim(), studentName:document.getElementById('studentName').value.trim(), phone:document.getElementById('phone').value.trim(), department:document.getElementById('department').value.trim() }; }
+  function borrowPayload() { return { ...commonPayload(), returnTime:state.returnTime, note:document.getElementById('borrowNote').value.trim(), roomKeyIds:[...state.roomKeyIds], remoteIds:[...state.remoteIds], equipmentItems:[...state.equipmentQty.entries()].map(([id,qty]) => ({id,qty})) }; }
+  function reservePayload() { return { ...commonPayload(), roomKeyIds:[...state.reserveRoomKeyIds], remoteIds:[...state.reserveRemoteIds], equipmentItems:[...state.reserveEquipmentQty.entries()].map(([id,qty])=>({id,qty})), useDate:document.getElementById('reserveDate').value, startTime:document.getElementById('reserveStart').value, endTime:document.getElementById('reserveEnd').value, returnMethod:document.getElementById('reserveReturnMethod').value, returnTime:document.getElementById('reserveReturnTime').value, note:document.getElementById('reserveNote').value.trim() }; }
+
+  function validateCommon(p) {
+    const missing=[]; if(!p.studentId)missing.push('學號 / 員編'); if(!p.studentName)missing.push('姓名'); if(!p.phone)missing.push('聯絡電話'); if(!p.department)missing.push('系所 / 單位');
+    if(missing.length){showToast('請完成：'+missing.join('、'),'error');return false;}
+    if(!/^\d+$/.test(p.studentId)){showToast('學號 / 員編請只輸入數字。','error');return false;}
+    if(!/^\d+$/.test(p.phone)){showToast('聯絡電話請只輸入數字。','error');return false;}
+    if(blacklistedIds.has(p.studentId)){
+      setBlacklistNotice(true);
+      document.getElementById('blacklistNotice').scrollIntoView({behavior:'smooth',block:'center'});
+      showToast('此學號／員編目前為黑名單，請詢問院辦人員。','error');
+      return false;
+    }
+    return true;
+  }
+
+  function openConfirm() {
+    if (state.mode === 'BORROW') {
+      const p = borrowPayload();
+      if (!validateCommon(p)) return;
+      if (!p.returnTime) return showToast('請選擇預計歸還時間。','error');
+      const items = selectedItems();
+      if (!items.length) return showToast('請至少選擇一項借用品。','error');
+
+      document.getElementById('confirmTitle').textContent = '確認借用內容';
+      document.getElementById('confirmContent').innerHTML = `<div class="rounded-2xl bg-slate-50 border border-slate-200 divide-y divide-slate-200">
+        <div class="px-4 py-3"><p class="text-[10px] text-slate-400 font-bold">借用人</p><p class="mt-1 font-black">${escapeHtml(p.studentName)} <span class="text-slate-400 font-medium">(${escapeHtml(p.studentId)})</span></p></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-slate-400 font-bold">借用品</p><div class="mt-2 flex flex-wrap gap-1.5">${items.map(i=>`<span class="px-2 py-1 rounded-full bg-white border border-slate-200 text-xs font-bold">${escapeHtml(i.name)}${i.qty>1?' ×'+i.qty+escapeHtml(i.unit):''}</span>`).join('')}</div></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-slate-400 font-bold">預計歸還</p><p class="mt-1 font-black">${escapeHtml(p.returnTime)}</p></div>
+      </div>`;
+    } else {
+      const p = reservePayload();
+      if (!validateCommon(p)) return;
+
+      const items = reservationSelectedItems();
+      if (!items.length) return showToast('請至少選擇一項預約借用品。','error');
+      if (!p.useDate || !p.startTime || !p.endTime) return showToast('請完整選擇使用日期與時間。','error');
+      if (p.startTime >= p.endTime) return showToast('結束時間必須晚於開始時間。','error');
+      if (!p.returnMethod) return showToast('請選擇歸還方式。','error');
+      if (!p.returnTime) return showToast('請選擇歸還時間。','error');
+
+      // 若已取得時段狀態，先在前端阻擋明顯衝突；後端送出時仍會再次驗證。
+      const conflictedRooms = [...new Set([
+        ...p.roomKeyIds.filter(id => state.reserveRoomAvailability.get(id) === false),
+        ...p.remoteIds.filter(id => state.reserveRoomAvailability.get(id) === false)
+      ])];
+      if (conflictedRooms.length) {
+        const names = conflictedRooms.map(id => state.data.rooms.find(r => r.id === id)?.name || id);
+        return showToast('以下教室在所選時段已有預約：' + names.join('、'), 'error');
+      }
+
+      document.getElementById('confirmTitle').textContent = '確認提前預約';
+      document.getElementById('confirmContent').innerHTML = `<div class="rounded-2xl bg-indigo-50 border border-indigo-200 divide-y divide-indigo-100">
+        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">預約人</p><p class="mt-1 font-black">${escapeHtml(p.studentName)} <span class="text-indigo-300 font-medium">(${escapeHtml(p.studentId)})</span></p></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">預約借用品</p><div class="mt-2 flex flex-wrap gap-1.5">${items.map(i=>`<span class="px-2 py-1 rounded-full bg-white border border-indigo-200 text-xs font-bold">${escapeHtml(i.name)}${i.qty>1?' ×'+i.qty+escapeHtml(i.unit):''}</span>`).join('')}</div></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">使用時段</p><p class="mt-1 font-black">${escapeHtml(p.useDate)}　${escapeHtml(p.startTime)}–${escapeHtml(p.endTime)}</p></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">歸還方式</p><p class="mt-1 font-black">${escapeHtml(p.returnMethod)}</p></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">歸還時間</p><p class="mt-1 font-black">${escapeHtml(p.returnTime)}</p></div>
+        ${p.note ? `<div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">備註</p><p class="mt-1 text-sm font-medium text-slate-700 whitespace-pre-wrap">${escapeHtml(p.note)}</p></div>` : ''}
+      </div>`;
+    }
+
+    const modal = document.getElementById('confirmModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeConfirm(){const m=document.getElementById('confirmModal');m.classList.add('hidden');m.classList.remove('flex');}
+
+  function submitCurrent() {
+    const btn = document.getElementById('confirmSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = '送出中…';
+
+    const runner = google.script.run
+      .withSuccessHandler(res => {
+        btn.disabled = false;
+        btn.textContent = '確認送出';
+
+        if (!res || !res.success) {
+          closeConfirm();
+
+          if (res?.code === 'BLACKLISTED') {
+            const sid=document.getElementById('studentId').value.trim();
+            blacklistedIds.add(sid);
+            studentMemoryCache.delete(sid);
+            setBlacklistNotice(true);
+            showToast(res.message, 'error');
+            return;
+          }
+
+          if (state.mode === 'BORROW' && res?.code === 'ITEM_UNAVAILABLE') {
+            (res.conflicts || []).forEach(c => {
+              if (c.type === 'ROOM_KEY') state.roomKeyIds.delete(c.id);
+              else if (c.type === 'AC_REMOTE') state.remoteIds.delete(c.id);
+              else if (c.type === 'EQUIPMENT') {
+                if (c.availableQty > 0) state.equipmentQty.set(c.id, Math.min(state.equipmentQty.get(c.id) || 0, c.availableQty));
+                else state.equipmentQty.delete(c.id);
+              }
+            });
+            loadInitialData();
+            showToast(res.message || '庫存不足', 'error');
+            return;
+          }
+
+          if (state.mode === 'RESERVE') {
+            if(res?.code==='RESERVATION_CONFLICT'){
+              (res.conflicts||[]).forEach(c=>{
+                const id=typeof c==='string'?c:c.id;
+                if(!id)return;
+                state.reserveRoomKeyIds.delete(id);
+                state.reserveRemoteIds.delete(id);
+              });
+              renderReservationRooms();
+              updateSelectedUI();
+              refreshReservationAvailability(false);
+            }else if(res?.code==='RESERVATION_EQUIPMENT_UNAVAILABLE'){
+              refreshReservationAvailability(false);
+            }
+          }
+
+          showToast(res?.message || '送出失敗', 'error');
+          return;
+        }
+
+        closeConfirm();
+        showSuccess(res);
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false;
+        btn.textContent = '確認送出';
+        showToast('送出失敗：' + (err.message || err), 'error');
+      });
+
+    if (state.mode === 'BORROW') runner.processBorrowV2(borrowPayload());
+    else runner.processReservationV2(reservePayload());
+  }
+
+
+  function showSuccess(res) {
+    if (state.mode === 'BORROW') {
+      document.getElementById('successTitle').textContent = '借用登記成功';
+      document.getElementById('successText').textContent = `共 ${res.lineCount || 0} 種，${res.totalUnits || 0} 件/單位`;
+      document.getElementById('successInfo').innerHTML = `<p class="text-[10px] text-slate-400 font-bold">借用單號</p><p class="font-mono text-xs font-bold break-all">${escapeHtml(res.loanId||'')}</p><p class="mt-3 text-[10px] text-slate-400 font-bold">預計歸還</p><p class="font-black">${escapeHtml(res.expectedReturn||'')}</p>`;
+    } else {
+      document.getElementById('successTitle').textContent = '提前預約成功';
+      document.getElementById('successText').textContent = `${res.itemSummary || '預約已建立'} · ${res.useDate || ''}`;
+      document.getElementById('successInfo').innerHTML = `<p class="text-[10px] text-slate-400 font-bold">預約編號</p><p class="font-mono text-xs font-bold break-all">${escapeHtml(res.reservationId||'')}</p><p class="mt-3 text-[10px] text-slate-400 font-bold">使用時段</p><p class="font-black">${escapeHtml(res.startTime||'')}–${escapeHtml(res.endTime||'')}</p>${res.returnMethod&&res.returnMethod!=='--'?`<p class="mt-3 text-[10px] text-slate-400 font-bold">歸還方式</p><p class="font-black">${escapeHtml(res.returnMethod)}</p>`:''}${res.returnTime&&res.returnTime!=='--'?`<p class="mt-3 text-[10px] text-slate-400 font-bold">歸還時間</p><p class="font-black">${escapeHtml(res.returnTime)}</p>`:''}`;
+    }
+    const m = document.getElementById('successModal');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+  }
+
+
+  function resetForNext() {
+    // 「再登記一筆」只清除本次借用 / 預約內容，保留借用人資料。
+    // 學號、姓名、電話、系所，以及已查到的名冊狀態都不清空。
+
+    // 1. 清空本次文字 / 搜尋欄位
+    ['borrowNote','reserveNote','roomSearch','equipmentSearch','reserveRoomSearch','reserveEquipmentSearch'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // 2. 清空立即借用所選項目
+    state.roomKeyIds.clear();
+    state.remoteIds.clear();
+    state.equipmentQty.clear();
+    state.returnTime = '';
+    state.assetTab = 'ROOM';
+    state.equipmentCategory = '全部';
+
+    // 3. 清空提前預約所選項目
+    state.reserveRoomKeyIds.clear();
+    state.reserveRemoteIds.clear();
+    state.reserveEquipmentQty.clear();
+    state.reserveEquipmentAvailability.clear();
+    state.reserveRoomAvailability.clear();
+    state.reserveAssetTab = 'ROOM';
+    state.reserveEquipmentCategory = '全部';
+
+    // 預約日期回到今天；開始 / 結束時間、歸還方式全部重設
+    const reserveDate = document.getElementById('reserveDate');
+    if (reserveDate) {
+      reserveDate.value = state.data?.today || reserveDate.min || '';
+    }
+    resetReserveTimePicker();
+
+    const reserveReturnMethod = document.getElementById('reserveReturnMethod');
+    if (reserveReturnMethod) reserveReturnMethod.value = '';
+
+    const reserveReturnTime = document.getElementById('reserveReturnTime');
+    if (reserveReturnTime) reserveReturnTime.value = '';
+
+    // 4. 只重畫目前看得到的流程，避免一次產生兩套大量 DOM。
+    if (state.data) {
+      renderReturnOptions();
+      updateSelectedUI();
+
+      if(state.mode==='BORROW')switchAssetTab('ROOM');
+      else if(state.mode==='RESERVE')switchReserveAssetTab('ROOM');
+    }
+
+    // 5. 關閉成功視窗
+    const m = document.getElementById('successModal');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+
+    // 6. 背景重新抓最新庫存 / 借出狀態。
+    // 不碰借用人欄位，所以同一位使用者可以直接登記下一筆。
+    loadInitialData();
+
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+
+  function showToast(message,type='info'){const t=document.getElementById('toast');t.textContent=message;const cls=type==='error'?'bg-rose-600 text-white':type==='success'?'bg-emerald-600 text-white':'bg-slate-800 text-white';t.className=`fixed top-4 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] rounded-2xl px-4 py-3 text-xs font-bold shadow-xl ${cls}`;t.classList.remove('hidden');clearTimeout(showToast._timer);showToast._timer=setTimeout(()=>t.classList.add('hidden'),3500);}
+  function safeDomId(v){return String(v??'').replace(/[^a-zA-Z0-9_-]/g,'_');}
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));}
+  function escapeAttr(v){return escapeHtml(v);}
+</script>
+</body>
+</html>

@@ -2982,7 +2982,7 @@ tr.row-void td:last-child,tr.row-void td:nth-child(7){text-decoration:none}
       <form class="login-form" onsubmit="event.preventDefault();adminDoLogin()">
         <label for="aPassword">後台密碼 *</label>
         <input type="password" id="aPassword" autocomplete="current-password">
-        <p class="field-help">密碼由院辦管理。登入後 6 小時內沒有操作會自動登出。</p>
+        <p class="field-help">密碼由院辦管理。登入後 12 小時內不用再輸入密碼，到期會自動登出。</p>
         <p class="err" id="loginErr" role="alert"></p>
         <button class="login-submit" type="submit" id="btnLogin">登入</button>
       </form>
@@ -2998,11 +2998,11 @@ tr.row-void td:last-child,tr.row-void td:nth-child(7){text-decoration:none}
    2. adminLogin 相容物件：舊程式仍呼叫 adminLogin.showModal()、close()、open，
       這裡改成切換 body.locked，不必逐一改寫舊程式。
    ========================================================= */
-const ADMIN_TOKEN_KEY='adminDutyToken';
-function adminTokenLoad_(){try{return sessionStorage.getItem(ADMIN_TOKEN_KEY)||''}catch(e){return ''}}
-function adminTokenSave_(t){try{t?sessionStorage.setItem(ADMIN_TOKEN_KEY,t):sessionStorage.removeItem(ADMIN_TOKEN_KEY)}catch(e){}}
-// 舊版把管理員帳號的通行證存在 localStorage，已不再有效，順手清除
-try{localStorage.removeItem(ADMIN_TOKEN_KEY)}catch(e){}
+const ADMIN_TOKEN_KEY='adminDutyTokenV2'; // 12 小時簽章通行證，存在 localStorage，關掉分頁也不用重新登入
+function adminTokenLoad_(){try{return localStorage.getItem(ADMIN_TOKEN_KEY)||''}catch(e){return ''}}
+function adminTokenSave_(t){try{t?localStorage.setItem(ADMIN_TOKEN_KEY,t):localStorage.removeItem(ADMIN_TOKEN_KEY)}catch(e){}}
+// 舊版通行證（鍵名 adminDutyToken）已不再有效，順手清除
+try{localStorage.removeItem('adminDutyToken');sessionStorage.removeItem('adminDutyToken')}catch(e){}
 
 window.adminLogin={
   /** 目前是否顯示登入畫面 */

@@ -1,4 +1,8 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>
+<!doctype html><html lang="zh-Hant"><head>
+  <!-- GitHub Pages 版：先載入後端網址設定，再載入轉接頭（讓 google.script.run 改走 fetch 呼叫 GAS 的 doPost） -->
+  <script src="./config.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=3"></script>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>
 (function(){
   try{
     document.documentElement.dataset.theme=localStorage.getItem('dutyThemeCarbon')||'light';
@@ -6,9 +10,6 @@
     document.documentElement.dataset.theme='light';
   }
 })();
-  <!-- GitHub Pages 版：先載入後端網址設定，再載入轉接頭（讓 google.script.run 改走 fetch 呼叫 GAS 的 doPost） -->
-  <script src="./config.js?v=1"></script>
-  <script src="../shared/gas-shim.js?v=3"></script>
 </script><title>管理後台｜手機版</title>
 <style>
 :root{--bg:#f4f4f4;--panel:#ffffff;--panel2:#ffffff;--panel3:#f4f4f4;--text:#161616;--muted:#6f6f6f;--line:#e0e0e0;--accent:#1e3a8a;--accent2:#172b66;--blue:#1e3a8a;--danger:#da1e28;--warn:#b45309;--shadow:none}

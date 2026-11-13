@@ -87,7 +87,39 @@
    * 實際送出請求到 GAS doPost
    * 使用 text/plain 是為了避免瀏覽器發出 CORS 預檢（GAS 不處理 OPTIONS）
    */
+  /**
+   * 頁面沒有成功載入 config.js 時（例如手機讀到舊的快取頁面），
+   * 自動補載同資料夾的 config.js 一次，再繼續呼叫後端
+   */
+  var configLoading = null;
+  function ensureConfig() {
+    if (window.GAS_URL) return Promise.resolve();
+    if (!configLoading) {
+      configLoading = new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = './config.js?t=' + Date.now(); // 加時間參數，避開快取
+        s.onload = s.onerror = function () { resolve(); };
+        document.head.appendChild(s);
+      });
+    }
+    return configLoading;
+  }
+
+  /**
+   * 呼叫入口：沒有後端網址時先補載 config.js，再實際送出
+   */
   function callGas(fnName, args) {
+    var route = window.gasRoutes && window.gasRoutes[fnName];
+    if (!(route && route.url) && !window.GAS_URL && !GAS_URL) {
+      return ensureConfig().then(function () { return callGasNow(fnName, args); });
+    }
+    return callGasNow(fnName, args);
+  }
+
+  /**
+   * 實際送出請求（原本的 callGas）
+   */
+  function callGasNow(fnName, args) {
     // 轉送設定：window.gasRoutes[函式名稱] = { url, fn, onCall, onData }
     // 用於把特定呼叫（例如後台登入）改送到其他 GAS 專案，並在成功後執行 onData
     var route = window.gasRoutes && window.gasRoutes[fnName];

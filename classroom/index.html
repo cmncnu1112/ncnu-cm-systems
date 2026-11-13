@@ -1,0 +1,2754 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <!-- GitHub Pages 版：先載入後端網址設定，再載入轉接頭（讓 google.script.run 改走 fetch 呼叫 GAS 的 doPost） -->
+  <script src="./config.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=3"></script>
+<title>管理學院教室空間使用查詢｜手機版</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeMobileDetail();
+});
+
+</script>
+<style>
+    :root{
+      --blue:#1769d2;--blue2:#0f56b3;--blue-soft:#eaf3ff;--ink:#172033;--muted:#6b778c;
+      --line:#e4eaf2;--bg:#f6f8fb;--card:#fff;--green:#1f9d62;--orange:#e58c2b;--red:#d84f5f;
+      --purple:#7a5bd4;--cyan:#3f95aa;--shadow:0 8px 24px rgba(36,54,80,.08);--radius:14px;
+    }
+    *{box-sizing:border-box} html,body{height:100%;margin:0;font-family:"Microsoft JhengHei UI","Microsoft JhengHei","Noto Sans TC","Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--bg)}
+    button,input,select,textarea{font:inherit} button{cursor:pointer}.hidden{display:none!important}
+    .topbar{height:68px;background:linear-gradient(90deg,#135ab9,#0d62c7);color:#fff;display:flex;align-items:center;padding:0 24px;gap:20px;box-shadow:0 2px 10px rgba(15,60,120,.16)}
+    .brand{display:flex;align-items:center;gap:12px;min-width:270px}.brand-icon{font-size:31px}.brand strong{display:block;font-size:18px}.brand small{opacity:.9;font-size:13px}
+    .top-search{display:flex;gap:10px;align-items:center;flex:1;max-width:660px}.top-search input{width:100%;height:40px;border:0;border-radius:9px;padding:0 14px;outline:none}.top-search button{height:40px;min-width:64px;border:0;border-radius:9px;padding:0 16px;background:#fff;color:var(--blue);font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;line-height:1;cursor:pointer}
+    .top-links{margin-left:auto;display:flex;gap:18px;font-size:13px;align-items:center;white-space:nowrap}.sync-pill{display:inline-flex;align-items:center;height:30px;padding:0 10px;border-radius:999px;background:#eaf3ff;color:#1769d2;border:1px solid #cfe2fb;font-size:11px;font-weight:750;white-space:nowrap}
+    .layout{height:100%;display:grid;grid-template-columns:248px 1fr;gap:12px;padding:12px}.sidebar{overflow:auto;padding-right:2px}.main{min-width:0;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.side-panel{padding:14px;margin-bottom:12px}.panel-title{font-weight:800;color:var(--blue);font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+    .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.cal-nav button{border:0;background:transparent;font-size:18px;color:#49556a}.cal-head{font-weight:700;font-size:14px}.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center;font-size:12px}.cal-week{color:#6e798d;padding:4px 0}.cal-day{padding:6px 0;border-radius:50%;cursor:pointer}.cal-day:hover{background:var(--blue-soft)}.cal-day.selected{background:var(--blue);color:#fff;font-weight:800}.cal-day.muted{color:#c2c8d1}.cal-day.today{outline:1px solid var(--blue)}
+    .select-full{width:100%;height:38px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:0 10px;color:var(--ink)}
+    .quick-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.quick-item{text-align:center;font-size:11px;color:#4b5669}.quick-btn{width:39px;height:39px;border:0;border-radius:12px;background:#f1f5fb;font-size:19px;margin-bottom:5px;display:inline-grid;place-items:center;color:#52627a;transition:.18s ease}.quick-btn:hover{background:#e9f1fb;color:var(--blue);transform:translateY(-1px)}.quick-btn svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}.quick-btn.primary{background:var(--blue);color:#fff}.tips{font-size:12px;color:#5d6879;line-height:1.65}.tips div{margin:5px 0}.ghost-btn{width:100%;height:36px;border:1px solid var(--line);background:#fff;border-radius:9px;color:#43506a}
+    .page-head{display:flex;align-items:center;gap:6px;min-width:0}.page-head h1{font-size:18px;line-height:1.15;margin:0;white-space:nowrap}.today-tag{background:var(--blue-soft);color:var(--blue);padding:3px 7px;border-radius:999px;font-size:10px;font-weight:700}.head-actions{display:flex;gap:6px;align-items:center}.btn{height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#344158;padding:0 11px;font-weight:650;white-space:nowrap}.btn:hover{background:#f7f9fc}.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue)}.btn-primary:hover{background:var(--blue2)}.btn-danger{background:#fff0f2;color:#b93445;border-color:#f3c7cd}.btn-warning{background:#fff6e7;color:#9b5b0a;border-color:#f4ddb7}
+    .control-bar{display:flex;align-items:center;gap:6px;padding:2px 0;min-height:40px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}.control-bar-plain{background:transparent;border:none;box-shadow:none;border-radius:0}.control-bar::-webkit-scrollbar{height:5px}.control-bar::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}.control-bar .nav-group,.control-bar .filter-group,.control-bar .action-group{display:flex;align-items:center;gap:5px;flex:0 0 auto}.control-bar .title-group{display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-right:2px}.control-bar .title-group h1{margin:0;font-size:20px;line-height:1;font-weight:800;white-space:nowrap;letter-spacing:0}.control-bar input[type=date],.control-bar select{height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px;color:var(--ink)}.control-bar input[type=date]{width:142px}.control-bar select{min-width:145px}.control-bar #roomFilter{min-width:130px;max-width:165px}.control-bar #categorySelect{min-width:138px;max-width:170px}.control-divider{width:1px;height:24px;background:var(--line);flex:0 0 1px}.control-spacer{flex:1;min-width:6px}.segmented{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;height:34px}.segmented button{border:0;background:#fff;padding:0 12px;color:#47546b}.segmented button.active{background:var(--blue);color:#fff;font-weight:750}
+    .side-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.side-stat{padding:10px;border:1px solid var(--line);border-radius:11px;background:#fbfcfe;display:flex;align-items:center;gap:8px;min-width:0}.side-stat-icon{width:31px;height:31px;border-radius:9px;display:grid;place-items:center;background:#edf4ff;font-size:15px;flex:0 0 auto}.side-stat:nth-child(2) .side-stat-icon{background:#edf9f1}.side-stat:nth-child(3) .side-stat-icon{background:#f4efff}.side-stat:nth-child(4) .side-stat-icon{background:#fff4e9}.side-stat small{display:block;color:var(--muted);font-size:10px;white-space:nowrap}.side-stat strong{display:block;font-size:15px;line-height:1.2;white-space:nowrap}.side-legend{display:grid;grid-template-columns:1fr 1fr;gap:9px 7px;font-size:11px;color:#586477}.side-legend .legend-item{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap}.dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+    .schedule-panel{flex:1;min-height:0}#dayView{overflow-x:auto;overflow-y:hidden}#rangeView{overflow:auto}.schedule{--slot-row-h:42px;border-collapse:separate;border-spacing:0;width:max-content;min-width:0;height:100%;table-layout:fixed}.schedule th,.schedule td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);position:relative;text-align:center;overflow:hidden}.schedule thead{height:44px}.schedule thead th{height:44px;background:#fff;position:sticky;top:0;z-index:20;width:150px;min-width:150px;padding:2px 3px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.schedule thead th:first-child{left:0;z-index:30;width:92px;min-width:92px}.schedule tbody tr{height:var(--slot-row-h)}.schedule tbody th{width:92px;min-width:92px;height:var(--slot-row-h);background:#fbfcfe;position:sticky;left:0;z-index:10;font-weight:650;color:#43506a;font-size:11px;padding:0 4px;white-space:nowrap}.schedule td{height:var(--slot-row-h);width:150px;min-width:150px;background:#fff}.schedule td:hover{background:#f8fbff}.slot-code{font-weight:800;color:#283448}.slot-time{font-size:9px;color:#7a8598;margin-left:3px}
+    .course-card{position:absolute;left:4px;right:4px;top:3px;border-radius:9px;padding:6px 8px;text-align:left;z-index:5;box-shadow:0 2px 7px rgba(29,42,66,.12);overflow:hidden;cursor:grab;border:1px solid rgba(0,0,0,.05)}.course-title{font-size:13px;font-weight:700;line-height:1.35;letter-spacing:.1px;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow-wrap:anywhere;word-break:break-word;padding-right:12px;text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased}.course-meta{font-size:11px;font-weight:500;line-height:1.3;margin-top:2px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-rendering:geometricPrecision;-webkit-font-smoothing:antialiased}.repeat-dot{position:absolute;right:7px;top:6px;font-size:10px}.drop-target.drag-over{outline:2px dashed var(--blue);outline-offset:-3px;background:#eef6ff!important}
+
+    .view-placeholder{padding:16px}.range-table{width:100%;border-collapse:separate;border-spacing:0}.range-table th,.range-table td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px;font-size:12px;text-align:center}.range-table th{background:#f9fbfd;position:sticky;top:0}.range-cell{min-height:42px}.mini-course{margin:3px 0;padding:5px 6px;border-radius:6px;font-size:10px;text-align:left}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(19,29,48,.45);backdrop-filter:blur(3px);z-index:1000;align-items:center;justify-content:center;padding:18px}.modal{width:min(560px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.22);padding:22px}.modal h2{font-size:19px;margin:0 0 16px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:12px;font-weight:750;color:#49566b}.field input,.field select,.field textarea{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#8fbaf1;box-shadow:0 0 0 3px #edf5ff}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.type-card{border:1px solid var(--line);border-radius:14px;padding:18px 12px;text-align:center;background:#fff;cursor:pointer}.type-card:hover{border-color:#9cc4f4;background:#f7fbff}.type-card .icon{font-size:28px}.type-card strong{display:block;margin:8px 0 4px}.type-card small{color:var(--muted);font-size:11px}.context{display:none;position:fixed;z-index:1400;width:160px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px}.context button{width:100%;text-align:left;border:0;background:#fff;padding:9px;border-radius:7px}.context button:hover{background:#f4f7fb}.context .danger{color:#bf3747}.conflict-list{background:#fff8e8;border:1px solid #f1d79c;border-radius:10px;padding:10px;font-size:12px;line-height:1.6;white-space:pre-line}.toast{position:fixed;right:22px;top:14px;z-index:2000;background:#1f2937;color:#fff;border-radius:10px;padding:10px 14px;opacity:0;transform:translateY(-8px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:none}.search-results{position:fixed;z-index:1700;top:58px;left:340px;width:min(570px,60vw);max-height:360px;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);display:none}.search-item{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}.search-item:hover{background:#f6f9fe}.search-item strong{display:block}.search-item small{color:var(--muted)}
+    @media(max-width:1280px){.brand{min-width:220px}.top-links span:not(.sync-pill){display:none}.layout{grid-template-columns:225px 1fr}.control-bar .title-group h1{font-size:18px}.control-bar select{min-width:125px}}@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{display:none}.brand{min-width:auto}.brand small{display:none}.top-search{max-width:none}.side-stats{grid-template-columns:1fr 1fr}.type-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.control-bar{flex-wrap:wrap;overflow:visible}.control-spacer{display:none}}
+  
+    /* 固定 Day 模式欄寬：不因篩選後教室數量變少而自動撐滿 */
+    #dayView .schedule{width:max-content!important;min-width:0!important;}
+    #dayView .schedule thead th:first-child,#dayView .schedule tbody th{width:92px!important;min-width:92px!important;max-width:92px!important;}
+    #dayView .schedule thead th:not(:first-child),#dayView .schedule td{width:150px!important;min-width:150px!important;max-width:150px!important;}
+
+    /* 課程類別色標選擇器 */
+    .course-color-field{grid-column:1/-1;}
+    .course-color-presets{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:2px;}
+    .course-color-option{height:42px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 9px;display:flex;align-items:center;justify-content:center;gap:7px;color:#445168;font-size:12px;font-weight:700;transition:.15s;position:relative;}
+    .course-color-option:hover{background:#f8fafc;border-color:#b8c7da;}
+    .course-color-option.active{border-color:var(--blue);box-shadow:0 0 0 2px rgba(23,105,210,.12);background:#f7fbff;color:#24548f;}
+    .course-color-option .color-swatch{width:15px;height:15px;border-radius:50%;border:1px solid rgba(0,0,0,.06);flex:0 0 auto;}
+    .course-color-option.custom{overflow:hidden;}
+    .course-color-option.custom input[type=color]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;padding:0;border:0;}
+    .custom-color-preview{width:15px;height:15px;border-radius:50%;background:#9fd0a8;border:1px solid rgba(0,0,0,.08);flex:0 0 auto;}
+    @media(max-width:700px){.course-color-presets{grid-template-columns:repeat(2,1fr)}.course-color-option:last-child{grid-column:1/-1}}
+
+
+    /* 修正：課程卡需要跨越多個時段時，不可被起始儲存格裁切 */
+    #dayView .schedule td{overflow:visible!important;}
+    #dayView .schedule tbody{overflow:visible;}
+    #dayView .schedule tr{overflow:visible;}
+    #dayView .course-card{z-index:12;}
+
+
+    .search-modal-box{width:min(620px,94vw)}
+    .search-modal-row{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+    .search-modal-row input{flex:1;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 13px;outline:none;font-size:14px}
+    .search-modal-row input:focus{border-color:#8fbaf1;box-shadow:0 0 0 3px #edf5ff}
+    .search-modal-row button{height:42px}
+    .search-modal-results{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:11px;background:#fff;min-height:74px}
+    .search-modal-empty{padding:22px;text-align:center;color:var(--muted);font-size:13px}
+
+
+    /* ===== 即時時間軸 ===== */
+    #dayView{position:relative;}
+    .current-time-line{
+      position:absolute;
+      left:92px;
+      right:0;
+      height:2px;
+      background:#1769d2;
+      z-index:18;
+      pointer-events:none;
+      display:none;
+      box-shadow:0 0 0 1px rgba(255,255,255,.35);
+    }
+    .current-time-line::before{
+      content:"";
+      position:absolute;
+      left:-4px;
+      top:50%;
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#1769d2;
+      transform:translateY(-50%);
+    }
+    .current-time-label{
+      position:absolute;
+      left:4px;
+      top:50%;
+      transform:translateY(-50%);
+      padding:2px 6px;
+      border-radius:6px;
+      background:#1769d2;
+      color:#fff;
+      font-size:10px;
+      line-height:1.2;
+      font-weight:800;
+      white-space:nowrap;
+      box-shadow:0 1px 4px rgba(23,105,210,.25);
+    }
+
+
+    /* 半小時時間軸 */
+    #dayView .schedule tbody th{font-variant-numeric:tabular-nums;}
+    #dayView .halfhour-label{font-size:10px!important;margin-left:0!important;color:#43506a;font-weight:700;}
+    #dayView .schedule tbody tr:nth-child(even) td{background:#fcfdff;}
+    #dayView .schedule tbody tr:nth-child(even) th{background:#f8fafc;}
+
+
+    /* 匯入新學期課表 */
+    .import-drop{border:1.5px dashed #b7c6da;border-radius:12px;padding:18px;text-align:center;background:#f9fbfe;transition:.18s}
+    .import-drop:hover{border-color:#7eabe5;background:#f3f8ff}
+    .import-drop input[type=file]{display:none}
+    .import-file-btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border-radius:9px;border:1px solid #cfe0f5;background:#fff;color:#1769d2;font-weight:750;cursor:pointer}
+    .import-file-name{margin-top:8px;font-size:12px;color:#5d6879;word-break:break-all}
+    .import-options{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+    .import-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+    .import-kpi{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fbfcfe}
+    .import-kpi small{display:block;color:var(--muted);font-size:10px}
+    .import-kpi strong{display:block;font-size:16px;margin-top:2px}
+    .import-warnings{margin-top:10px;padding:10px;border-radius:10px;background:#fff8e8;border:1px solid #f2deb4;font-size:12px;line-height:1.6;max-height:145px;overflow:auto}
+    .import-preview-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}
+    .import-preview-table th,.import-preview-table td{border-bottom:1px solid var(--line);padding:6px;text-align:left;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+    .import-preview-table th{background:#f6f9fd;position:sticky;top:0}
+    .import-preview-wrap{max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+    .import-note{font-size:11px;color:#657187;line-height:1.6;margin-top:8px}
+
+
+    /* 課程卡文字依卡片高度自適應 */
+    .course-card.card-compact{padding:4px 7px;}
+    .course-card.card-compact .course-title{font-size:11px;line-height:1.18;-webkit-line-clamp:1;}
+    .course-card.card-compact .course-meta{display:none;}
+
+    .course-card.card-medium .course-title{font-size:12px;line-height:1.25;-webkit-line-clamp:2;}
+    .course-card.card-medium .course-meta{font-size:10px;line-height:1.2;}
+
+    .course-card.card-tall .course-title{font-size:12px;line-height:1.28;-webkit-line-clamp:4;}
+    .course-card.card-tall .course-meta{font-size:10px;line-height:1.25;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;}
+
+    .course-card.card-x-tall .course-title{font-size:12px;line-height:1.3;-webkit-line-clamp:6;}
+    .course-card.card-x-tall .course-meta{font-size:10px;line-height:1.25;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;}
+
+
+
+    /* ===== 水平捲動時固定時間欄 + 完整現在時間線 ===== */
+    #dayView{position:relative; isolation:isolate;}
+    #dayView .schedule thead th:first-child{
+      position:sticky!important;
+      left:0!important;
+      z-index:80!important;
+      background:#fff!important;
+      box-shadow:2px 0 0 var(--line), 5px 0 8px rgba(23,32,51,.05);
+    }
+    #dayView .schedule tbody th{
+      position:sticky!important;
+      left:0!important;
+      z-index:70!important;
+      background:#fbfcfe!important;
+      overflow:hidden!important;
+      box-shadow:2px 0 0 var(--line), 5px 0 8px rgba(23,32,51,.04);
+    }
+    #dayView .schedule tbody tr:nth-child(even) th{
+      background:#f8fafc!important;
+    }
+    #dayView .course-card{z-index:12!important;}
+    #dayView .current-time-line{
+      z-index:40!important;
+      right:auto!important;
+      pointer-events:none;
+    }
+
+
+
+    /* ===== 課程卡標題：恢復單行省略 ===== */
+    .course-title{
+      display:block!important;
+      white-space:nowrap!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      -webkit-line-clamp:unset!important;
+      -webkit-box-orient:unset!important;
+      line-height:1.25!important;
+      max-height:none!important;
+    }
+    .course-card.card-medium .course-title,
+    .course-card.card-tall .course-title,
+    .course-card.card-x-tall .course-title{
+      -webkit-line-clamp:unset!important;
+      max-height:none!important;
+    }
+
+
+    /* 時間軸最晚顯示至 22:00 */
+
+
+    /* 常用操作：固定文字為兩行，避免窄欄位出現不規則換行 */
+    .quick-label{
+      line-height:1.3;
+      min-height:29px;
+      white-space:nowrap;
+      text-align:center;
+    }
+
+
+    /* ===== 底部水平捲軸美化 ===== */
+    #dayView{scrollbar-width:thin;scrollbar-color:#94a3b8 #eef2f7;}
+    #dayView::-webkit-scrollbar{height:8px;}
+    #dayView::-webkit-scrollbar-track{background:#eef2f7;border-radius:999px;}
+    #dayView::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:999px;border:2px solid #eef2f7;}
+    #dayView::-webkit-scrollbar-thumb:hover{background:#64748b;}
+
+
+    /* 月檢視：課程點依課程色標顯示 */
+    .month-course-dot{
+      display:inline-block;
+      width:9px;
+      height:9px;
+      margin:0 2px;
+      border-radius:50%;
+      vertical-align:middle;
+      border:1px solid rgba(0,0,0,.08);
+      box-shadow:0 1px 2px rgba(0,0,0,.08);
+    }
+
+
+    /* 週／月檢視：完整細項提示 */
+    .course-detail-tooltip{
+      position:fixed;z-index:2600;display:none;min-width:220px;max-width:320px;
+      padding:10px 12px;border:1px solid #dbe4ef;border-radius:10px;
+      background:rgba(255,255,255,.98);color:#172033;
+      box-shadow:0 10px 30px rgba(31,45,68,.18);
+      font-size:12px;line-height:1.55;pointer-events:none;
+    }
+    .course-detail-tooltip .tip-title{font-size:13px;font-weight:800;margin-bottom:5px}
+    .course-detail-tooltip .tip-row{display:flex;gap:6px;margin:2px 0;align-items:flex-start}
+    .course-detail-tooltip .tip-label{flex:0 0 62px;color:#748096;font-weight:650}
+    .course-detail-tooltip .tip-value{flex:1;min-width:0;word-break:break-word}
+    .mini-course,.month-course-dot{cursor:default}
+
+
+    /* ===== 月檢視：色點固定單行、整齊排列 ===== */
+    .month-dot-row{
+      min-height:22px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:3px;
+      flex-wrap:nowrap;
+      white-space:nowrap;
+      overflow:hidden;
+    }
+    .month-dot-row .month-course-dot{
+      width:8px;
+      height:8px;
+      margin:0;
+      flex:0 0 8px;
+      border:1px solid rgba(0,0,0,.07);
+      box-shadow:none;
+    }
+    .month-more{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      height:16px;
+      min-width:20px;
+      padding:0 3px;
+      border-radius:999px;
+      background:#eef3f8;
+      color:#5b687c;
+      font-size:9px;
+      line-height:1;
+      font-weight:750;
+      flex:0 0 auto;
+      cursor:default;
+    }
+    #rangeView .range-table td{
+      vertical-align:middle;
+    }
+
+
+    /* ===== 月檢視：固定格尺寸，以 6 個色點為基準 ===== */
+    #rangeView .range-table{
+      width:max-content;
+      table-layout:fixed;
+      border-collapse:separate;
+      border-spacing:0;
+    }
+    #rangeView .range-table th,
+    #rangeView .range-table td{
+      height:44px;
+      min-height:44px;
+      max-height:44px;
+      padding:0 4px;
+      overflow:hidden;
+    }
+    #rangeView .range-table th:first-child,
+    #rangeView .range-table td:first-child{
+      width:82px;
+      min-width:82px;
+      max-width:82px;
+    }
+    #rangeView .range-table th:not(:first-child),
+    #rangeView .range-table td:not(:first-child){
+      width:72px;
+      min-width:72px;
+      max-width:72px;
+    }
+    .month-dot-row{
+      width:100%;
+      height:100%;
+      min-height:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:3px;
+      flex-wrap:nowrap;
+      white-space:nowrap;
+      overflow:hidden;
+    }
+    .month-dot-row .month-course-dot{
+      width:8px;
+      height:8px;
+      flex:0 0 8px;
+      margin:0;
+    }
+
+
+    /* ===== 月檢視：滿版 + 教室列高響應瀏覽器高度 ===== */
+    #rangeView{
+      min-height:0;
+      overflow:auto;
+    }
+    #rangeView .view-placeholder{
+      height:100%;
+      padding:0;
+    }
+    #rangeView .range-table{
+      width:max-content;
+      min-width:100%;
+      height:100%;
+      table-layout:fixed;
+      border-collapse:separate;
+      border-spacing:0;
+    }
+    #rangeView .range-table thead{
+      height:38px;
+    }
+    #rangeView .range-table thead th{
+      height:38px;
+      min-height:38px;
+      max-height:38px;
+      padding:0 4px;
+      vertical-align:middle;
+    }
+    #rangeView .range-table tbody tr{
+      height:var(--range-room-row-h,44px);
+    }
+    #rangeView .range-table tbody th,
+    #rangeView .range-table tbody td{
+      height:var(--range-room-row-h,44px);
+      min-height:var(--range-room-row-h,44px);
+      max-height:var(--range-room-row-h,44px);
+      padding:0 4px;
+      vertical-align:middle;
+      overflow:hidden;
+    }
+    #rangeView .range-table th:first-child,
+    #rangeView .range-table td:first-child{
+      width:82px;
+      min-width:82px;
+      max-width:82px;
+    }
+    #rangeView .range-table th:not(:first-child),
+    #rangeView .range-table td:not(:first-child){
+      width:72px;
+      min-width:72px;
+      max-width:72px;
+    }
+
+
+    /* ===== 週檢視：教室列高與月檢視一致 ===== */
+    #rangeView .range-table tbody tr{
+      height:var(--range-room-row-h,44px);
+    }
+    #rangeView .range-table tbody th,
+    #rangeView .range-table tbody td{
+      height:var(--range-room-row-h,44px);
+      min-height:var(--range-room-row-h,44px);
+      max-height:var(--range-room-row-h,44px);
+    }
+
+
+    /* ===== 週檢視：教室欄寬與月檢視一致 ===== */
+    #rangeView .range-table.week-range-table{
+      width:100%;
+      min-width:100%;
+      table-layout:fixed;
+    }
+    #rangeView .range-table.week-range-table col.room-col{
+      width:82px;
+    }
+    #rangeView .range-table.week-range-table th:first-child,
+    #rangeView .range-table.week-range-table td:first-child{
+      width:82px!important;
+      min-width:82px!important;
+      max-width:82px!important;
+    }
+
+
+    /* ===== 週檢視：真正固定教室欄 82px ===== */
+    #rangeView .week-range-table{
+      width:100%!important;
+      min-width:100%!important;
+      table-layout:fixed!important;
+    }
+    #rangeView .week-range-table col.room-col{
+      width:82px!important;
+      min-width:82px!important;
+      max-width:82px!important;
+    }
+    #rangeView .week-range-table col.day-col{
+      width:calc((100% - 82px) / 7)!important;
+    }
+    #rangeView .week-range-table th:first-child,
+    #rangeView .week-range-table td:first-child{
+      width:82px!important;
+      min-width:82px!important;
+      max-width:82px!important;
+      box-sizing:border-box!important;
+    }
+
+
+    /* ===== 週檢視：改用 Grid，第一欄真正固定 82px ===== */
+    .week-grid{
+      width:100%;
+      height:100%;
+      display:grid;
+      grid-template-columns:82px repeat(7,minmax(0,1fr));
+      grid-template-rows:38px repeat(var(--week-room-count,1),var(--range-room-row-h,44px));
+      border-top:1px solid var(--line);
+      border-left:1px solid var(--line);
+      background:#fff;
+    }
+    .week-grid-cell{
+      min-width:0;
+      min-height:0;
+      border-right:1px solid var(--line);
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+      box-sizing:border-box;
+      font-size:12px;
+      background:#fff;
+    }
+    .week-grid-head{
+      background:#f9fbfd;
+      font-weight:700;
+      line-height:1.2;
+      text-align:center;
+    }
+    .week-grid-room{
+      background:#f9fbfd;
+      font-weight:700;
+      white-space:nowrap;
+    }
+    .week-grid-day{
+      padding:3px 5px;
+      display:block;
+      position:relative;
+    }
+    .week-grid-day .mini-course{
+      width:100%;
+      box-sizing:border-box;
+    }
+
+
+    /* 反灰的前後月份日期也可點選 */
+    .cal-day.muted{cursor:pointer;}
+    .cal-day.muted:hover{background:var(--blue-soft);color:var(--blue);}
+
+
+    /* ===== 淺色／深色模式 ===== */
+    .theme-switch{display:flex;height:34px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card);flex:0 0 auto}
+    .theme-switch button{border:0;background:transparent;color:var(--muted);padding:0 10px;font-size:12px;font-weight:700;white-space:nowrap}
+    .theme-switch button+button{border-left:1px solid var(--line)}
+    .theme-switch button.active{background:var(--blue-soft);color:var(--blue)}
+
+    html[data-theme="dark"]{
+      --blue:#65a8ff;--blue2:#86baff;--blue-soft:#162f50;--ink:#e8edf5;--muted:#9ba8ba;
+      --line:#334154;--bg:#111823;--card:#182231;--green:#58c98d;--orange:#f3b65f;--red:#ef7e8b;
+      --purple:#a990ed;--cyan:#68b9ca;--shadow:0 8px 24px rgba(0,0,0,.25);
+    }
+    html[data-theme="dark"] body{background:var(--bg);color:var(--ink)}
+    html[data-theme="dark"] .panel,
+    html[data-theme="dark"] .side-panel,
+    html[data-theme="dark"] .modal,
+    html[data-theme="dark"] .context,
+    html[data-theme="dark"] .search-results,
+    html[data-theme="dark"] .search-modal-results{background:var(--card);border-color:var(--line);color:var(--ink)}
+    html[data-theme="dark"] .btn,
+    html[data-theme="dark"] .segmented,
+    html[data-theme="dark"] .segmented button,
+    html[data-theme="dark"] .theme-switch,
+    html[data-theme="dark"] .control-bar input[type=date],
+    html[data-theme="dark"] .control-bar select,
+    html[data-theme="dark"] .select-full,
+    html[data-theme="dark"] .ghost-btn,
+    html[data-theme="dark"] .field input,
+    html[data-theme="dark"] .field select,
+    html[data-theme="dark"] .field textarea,
+    html[data-theme="dark"] .type-card,
+    html[data-theme="dark"] .context button,
+    html[data-theme="dark"] .course-color-option,
+    html[data-theme="dark"] .search-modal-row input{background:#202c3c;color:var(--ink);border-color:var(--line)}
+    html[data-theme="dark"] .btn:hover,
+    html[data-theme="dark"] .context button:hover,
+    html[data-theme="dark"] .type-card:hover,
+    html[data-theme="dark"] .course-color-option:hover{background:#263548}
+    html[data-theme="dark"] .btn-primary,
+    html[data-theme="dark"] .segmented button.active{background:#297ad8;color:#fff;border-color:#297ad8}
+    html[data-theme="dark"] .theme-switch button.active{background:#28415f;color:#9fc8ff}
+    html[data-theme="dark"] .side-stat{background:#202b39;border-color:var(--line)}
+    html[data-theme="dark"] .side-stat-icon{filter:saturate(.85) brightness(.9)}
+    html[data-theme="dark"] .schedule thead th,
+    html[data-theme="dark"] .schedule td{background:#182231;color:var(--ink);border-color:var(--line)}
+    html[data-theme="dark"] .schedule tbody th{background:#1d2938;color:#c5d0df;border-color:var(--line)}
+    html[data-theme="dark"] #dayView .schedule tbody tr:nth-child(even) td{background:#1b2635}
+    html[data-theme="dark"] #dayView .schedule tbody tr:nth-child(even) th{background:#202c3b}
+    html[data-theme="dark"] .schedule td:hover{background:#22344b}
+    html[data-theme="dark"] .slot-code{color:#dbe5f2}
+    html[data-theme="dark"] .halfhour-label{color:#b6c4d6!important}
+    html[data-theme="dark"] .range-table th,
+    html[data-theme="dark"] .range-table td{border-color:var(--line);color:var(--ink)}
+    html[data-theme="dark"] .range-table th{background:#1d2938}
+    html[data-theme="dark"] .range-table td{background:#182231}
+    html[data-theme="dark"] .week-grid,
+    html[data-theme="dark"] .week-grid-cell{background:#182231;color:var(--ink);border-color:var(--line)}
+    html[data-theme="dark"] .week-grid-head,
+    html[data-theme="dark"] .week-grid-room{background:#1d2938}
+    html[data-theme="dark"] .cal-nav button{color:#b9c6d7}
+    html[data-theme="dark"] .cal-week{color:#95a4b8}
+    html[data-theme="dark"] .cal-day.muted{color:#66758a}
+    html[data-theme="dark"] .cal-day:hover{background:#263a53}
+    html[data-theme="dark"] .quick-btn{background:#223044;color:#aebdd0}
+    html[data-theme="dark"] .quick-btn:hover{background:#2a405a;color:#8fc0ff}
+    html[data-theme="dark"] .quick-btn.primary{background:#297ad8;color:#fff}
+    html[data-theme="dark"] .course-detail-tooltip{background:rgba(25,35,49,.98);color:var(--ink);border-color:var(--line);box-shadow:0 10px 30px rgba(0,0,0,.4)}
+    html[data-theme="dark"] .course-detail-tooltip .tip-title{color:var(--ink)}
+    html[data-theme="dark"] .course-detail-tooltip .tip-label{color:#93a4ba}
+    html[data-theme="dark"] .import-drop{background:#1d2938;border-color:#43546b}
+    html[data-theme="dark"] .import-drop:hover{background:#22344b;border-color:#5b83b4}
+    html[data-theme="dark"] .sync-pill{background:#18345a;color:#9fc8ff;border-color:#315c8f}
+    html[data-theme="dark"] .toast{background:#e7edf6;color:#182231}
+    html[data-theme="dark"] ::-webkit-scrollbar-track{background:#141d29}
+    html[data-theme="dark"] ::-webkit-scrollbar-thumb{background:#4d5f75}
+    html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover{background:#63758c}
+
+
+    /* ===== 深色模式完整修正：日檢視時間/教室、週課程文字、週月捲軸 ===== */
+
+    /* 所有可水平/垂直捲動課表統一捲軸尺寸 */
+    #dayView,
+    #rangeView,
+    #rangeContent{
+      scrollbar-width:thin;
+      scrollbar-color:#8b98a9 #eef2f6;
+    }
+    #dayView::-webkit-scrollbar,
+    #rangeView::-webkit-scrollbar,
+    #rangeContent::-webkit-scrollbar{
+      width:8px;
+      height:8px;
+    }
+    #dayView::-webkit-scrollbar-track,
+    #rangeView::-webkit-scrollbar-track,
+    #rangeContent::-webkit-scrollbar-track{
+      background:#eef2f6;
+      border-radius:999px;
+    }
+    #dayView::-webkit-scrollbar-thumb,
+    #rangeView::-webkit-scrollbar-thumb,
+    #rangeContent::-webkit-scrollbar-thumb{
+      background:#8b98a9;
+      border-radius:999px;
+      border:1px solid #eef2f6;
+    }
+    #dayView::-webkit-scrollbar-thumb:hover,
+    #rangeView::-webkit-scrollbar-thumb:hover,
+    #rangeContent::-webkit-scrollbar-thumb:hover{
+      background:#6f7d90;
+    }
+
+    /* 深色：日檢視整個表頭及固定時間欄，不留白底 */
+    html[data-theme="dark"] #dayView .schedule thead th,
+    html[data-theme="dark"] #dayView .schedule thead th:first-child,
+    html[data-theme="dark"] #dayView .schedule tbody th,
+    html[data-theme="dark"] #dayView .schedule tbody th:first-child{
+      background:#182536 !important;
+      color:#e8eef7 !important;
+      border-color:#33465c !important;
+    }
+    html[data-theme="dark"] #dayView .schedule tbody th .slot-code,
+    html[data-theme="dark"] #dayView .schedule tbody th small,
+    html[data-theme="dark"] #dayView .schedule thead th small{
+      color:#9fb2c9 !important;
+    }
+    html[data-theme="dark"] #dayView .schedule td{
+      background:#182536 !important;
+      border-color:#33465c !important;
+    }
+
+    /* sticky 左欄一定蓋在課程卡上方且保持深色 */
+    html[data-theme="dark"] #dayView .schedule thead th:first-child{
+      box-shadow:3px 0 6px rgba(0,0,0,.26);
+    }
+    html[data-theme="dark"] #dayView .schedule tbody th{
+      box-shadow:3px 0 6px rgba(0,0,0,.18);
+    }
+
+    /* 深色：週/月 Grid 或 Table 的背景與格線 */
+    html[data-theme="dark"] .week-grid-cell,
+    html[data-theme="dark"] #rangeView .range-table td{
+      background:#182536 !important;
+      border-color:#33465c !important;
+    }
+    html[data-theme="dark"] .week-grid-head,
+    html[data-theme="dark"] .week-grid-room,
+    html[data-theme="dark"] #rangeView .range-table th{
+      background:#152131 !important;
+      color:#e8eef7 !important;
+      border-color:#33465c !important;
+    }
+
+    /* 深色捲軸：與日檢視同款，只調整明暗 */
+    html[data-theme="dark"] #dayView,
+    html[data-theme="dark"] #rangeView,
+    html[data-theme="dark"] #rangeContent{
+      scrollbar-color:#66788d #111b29;
+    }
+    html[data-theme="dark"] #dayView::-webkit-scrollbar-track,
+    html[data-theme="dark"] #rangeView::-webkit-scrollbar-track,
+    html[data-theme="dark"] #rangeContent::-webkit-scrollbar-track{
+      background:#111b29;
+    }
+    html[data-theme="dark"] #dayView::-webkit-scrollbar-thumb,
+    html[data-theme="dark"] #rangeView::-webkit-scrollbar-thumb,
+    html[data-theme="dark"] #rangeContent::-webkit-scrollbar-thumb{
+      background:#66788d;
+      border-color:#111b29;
+    }
+    html[data-theme="dark"] #dayView::-webkit-scrollbar-thumb:hover,
+    html[data-theme="dark"] #rangeView::-webkit-scrollbar-thumb:hover,
+    html[data-theme="dark"] #rangeContent::-webkit-scrollbar-thumb:hover{
+      background:#8395aa;
+    }
+
+
+    /* 週課程卡文字依色塊亮度決定，不因深色主題強制變白 */
+    html[data-theme="dark"] .mini-course{
+      text-shadow:none !important;
+    }
+
+
+    /* 月檢視：色點改為靠左排列 */
+    .month-dot-row{
+      justify-content:flex-start !important;
+      padding-left:5px;
+      box-sizing:border-box;
+    }
+
+
+    /* 浮動細項提示：教師/借用人等標籤固定單行 */
+    .course-detail-tooltip .tip-label{
+      flex:0 0 78px !important;
+      width:78px !important;
+      white-space:nowrap !important;
+      word-break:keep-all !important;
+    }
+
+
+    @media(max-width:1280px){
+      .control-bar .title-group h1{
+        font-size:17px !important;
+      }
+    }
+
+
+    /* 淺色模式：時間/教室固定欄右側取消粗分隔線，與深色模式一致 */
+    html:not([data-theme="dark"]) #dayView .schedule thead th:first-child,
+    html:not([data-theme="dark"]) #dayView .schedule tbody th{
+      box-shadow:none !important;
+      border-right:1px solid var(--line) !important;
+    }
+
+
+    /* ===== 教室篩選：多選勾選 Modal ===== */
+    .room-filter-btn{
+      min-width:132px;
+      gap:6px;
+      white-space:nowrap;
+    }
+    .room-filter-btn #roomFilterCount{
+      font-size:11px;
+      color:var(--muted);
+      font-weight:700;
+    }
+    .room-filter-modal{
+      width:min(560px,calc(100vw - 28px));
+      max-height:min(760px,calc(100vh - 36px));
+      display:flex;
+      flex-direction:column;
+    }
+    .room-filter-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:10px;
+    }
+    .room-filter-head h2{margin:0;}
+    .room-filter-toolbar{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-bottom:10px;
+    }
+    .room-filter-modal-count{
+      margin-left:auto;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:700;
+    }
+    .room-filter-list{
+      flex:1;
+      min-height:180px;
+      max-height:460px;
+      overflow:auto;
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:8px;
+      padding:3px 2px 8px;
+    }
+    .room-check-item{
+      display:flex;
+      align-items:center;
+      gap:9px;
+      min-height:42px;
+      padding:8px 10px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--panel);
+      cursor:pointer;
+      user-select:none;
+      box-sizing:border-box;
+    }
+    .room-check-item:hover{
+      border-color:var(--blue);
+      background:var(--blue-soft);
+    }
+    .room-check-item input{
+      width:16px;
+      height:16px;
+      margin:0;
+      accent-color:var(--blue);
+      flex:0 0 auto;
+    }
+    .room-check-name{
+      font-weight:700;
+      line-height:1.2;
+      min-width:0;
+    }
+    .room-check-capacity{
+      margin-left:auto;
+      color:var(--muted);
+      font-size:11px;
+      white-space:nowrap;
+    }
+    html[data-theme="dark"] .room-check-item{
+      background:#1c2b3d;
+      border-color:#34475d;
+    }
+    html[data-theme="dark"] .room-check-item:hover{
+      background:#24384f;
+      border-color:#6ca9f0;
+    }
+    @media(max-width:620px){
+      .room-filter-list{grid-template-columns:1fr;}
+    }
+
+
+    /* 淺色模式：固定時間/教室欄保留柔和陰影，但不使用粗分隔線 */
+    html:not([data-theme="dark"]) #dayView .schedule thead th:first-child,
+    html:not([data-theme="dark"]) #dayView .schedule tbody th{
+      border-right:1px solid var(--line) !important;
+      box-shadow:3px 0 6px rgba(31,45,68,.10) !important;
+    }
+
+    html:not([data-theme="dark"]) #dayView .schedule thead th:first-child{
+      box-shadow:4px 0 8px rgba(31,45,68,.12) !important;
+    }
+
+
+    /* 淺色模式：左上「時間/教室」表頭只保留右側陰影，不要下方陰影 */
+    html:not([data-theme="dark"]) #dayView .schedule thead th:first-child{
+      box-shadow:4px 0 8px -4px rgba(31,45,68,.14) !important;
+    }
+
+
+    /* ===== Index 桌面純閱覽版 ===== */
+    .readonly-pill{
+      display:inline-flex;align-items:center;justify-content:center;
+      height:30px;padding:0 10px;border-radius:999px;
+      background:#eef5ff;color:#2769b6;border:1px solid #d7e7fb;
+      font-size:12px;font-weight:750;white-space:nowrap;
+    }
+    html[data-theme="dark"] .readonly-pill{
+      background:#203752;color:#a9d0ff;border-color:#365777;
+    }
+
+    /* Index 桌面版：沿用 Admin 相同側欄尺寸 */
+    .main{
+      min-width:0 !important;
+      height:100% !important;
+      overflow:hidden !important;
+    }
+
+    /* 純閱覽：課程卡不呈現可編輯游標 */
+    #dayView .course-card,
+    #dayView .drop-target{cursor:default !important;}
+
+    @media (min-width:901px){
+      .sidebar{display:block !important;}
+    }
+
+
+    /* ===== 課表原子載入：格線、課程、時間線完成後一次顯示 ===== */
+    .main{position:relative;}
+    .schedule-loading{
+      position:absolute;z-index:1900;left:0;right:0;top:46px;bottom:0;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(244,247,251,.94);
+      opacity:0;visibility:hidden;pointer-events:none;
+      transition:opacity .12s ease,visibility .12s ease;
+    }
+    .schedule-loading.show{opacity:1;visibility:visible;pointer-events:auto;}
+    .schedule-loading-box{
+      display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid #dce5f0;
+      border-radius:999px;background:rgba(255,255,255,.96);color:#435167;font-size:12px;font-weight:700;
+      box-shadow:0 8px 24px rgba(31,45,68,.10);
+    }
+    .schedule-spinner{
+      width:14px;height:14px;border:2px solid #cfe0f5;border-top-color:#1976dc;border-radius:50%;
+      animation:scheduleSpin .65s linear infinite;
+    }
+    @keyframes scheduleSpin{to{transform:rotate(360deg)}}
+    #dayView,#rangeView{transition:opacity .12s ease;}
+    .schedule-rendering #dayView,.schedule-rendering #rangeView{opacity:0;}
+    html[data-theme="dark"] .schedule-loading{background:rgba(18,29,43,.95);}
+    html[data-theme="dark"] .schedule-loading-box{background:#1d2c3e;color:#e7eef8;border-color:#34485f;box-shadow:0 8px 24px rgba(0,0,0,.28);}
+    html[data-theme="dark"] .schedule-spinner{border-color:#405873;border-top-color:#7db8ff;}
+
+
+    /* ===== Admin / Index 側欄尺寸統一 ===== */
+    @media (min-width:1201px){
+      .layout{grid-template-columns:248px minmax(0,1fr) !important;}
+    }
+    @media (min-width:901px) and (max-width:1200px){
+      .layout{grid-template-columns:225px minmax(0,1fr) !important;}
+    }
+
+
+    /* ===== 週檢視：依每間教室當週課程數自動調整列高 ===== */
+    .week-grid{
+      align-content:start;
+      height:auto !important;
+      min-height:100%;
+    }
+    .week-grid-day{
+      display:flex !important;
+      flex-direction:column !important;
+      align-items:stretch !important;
+      justify-content:flex-start !important;
+      gap:4px !important;
+      padding:5px !important;
+      overflow:visible !important;
+    }
+    .week-grid-day .mini-course{
+      flex:0 0 24px;
+      height:24px;
+      min-height:24px;
+      max-height:24px;
+      margin:0 !important;
+      padding:0 6px !important;
+      display:flex;
+      align-items:center;
+      gap:4px;
+      border-radius:6px;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+      box-sizing:border-box;
+      line-height:1;
+    }
+    .week-grid-day .mini-course b{
+      flex:0 0 auto;
+    }
+    .week-grid-day .mini-course{
+      font-size:11px;
+    }
+    #rangeView{
+      overflow:auto !important;
+    }
+
+
+    /* ===== Mobile 純閱覽版 ===== */
+    html,body{
+      width:100%;
+      min-width:0;
+      overflow:hidden;
+      overscroll-behavior:none;
+    }
+
+    .layout{
+      display:flex !important;
+      flex-direction:column !important;
+      width:100% !important;
+      height:100dvh !important;
+      min-height:0 !important;
+      overflow:hidden !important;
+    }
+
+    /* 側欄改成上方資訊區，不固定 */
+    .sidebar{
+      order:1;
+      width:100% !important;
+      height:auto !important;
+      max-height:none !important;
+      padding:8px !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:8px !important;
+      overflow:visible !important;
+      background:var(--bg);
+      border-right:0 !important;
+      box-sizing:border-box;
+    }
+
+    .sidebar .side-panel{
+      margin:0 !important;
+      border-radius:12px !important;
+    }
+
+    /* 月曆手機版縮小 */
+    .sidebar .calendar-only-panel{
+      padding:8px 10px !important;
+    }
+    .cal-nav{
+      margin-bottom:6px !important;
+    }
+    .cal-grid{
+      gap:2px !important;
+    }
+    .cal-day,.cal-week{
+      min-height:28px !important;
+      font-size:11px !important;
+    }
+
+    /* 當日概況改橫向 4 格 */
+    .stats-grid{
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    .stat-card{
+      min-width:0 !important;
+      padding:7px 6px !important;
+      gap:5px !important;
+    }
+    .stat-card .stat-icon{
+      width:26px !important;
+      height:26px !important;
+      min-width:26px !important;
+      font-size:13px !important;
+    }
+    .stat-card .stat-label{
+      font-size:9px !important;
+      white-space:nowrap;
+    }
+    .stat-card .stat-value{
+      font-size:15px !important;
+    }
+
+    /* 色標改橫向 */
+    .legend-list{
+      display:grid !important;
+      grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+      gap:6px !important;
+    }
+    .legend-item{
+      font-size:10px !important;
+      white-space:nowrap;
+    }
+
+    /* 主區 */
+    .main{
+      order:2;
+      width:100% !important;
+      flex:1 1 auto !important;
+      min-height:0 !important;
+      height:auto !important;
+      overflow:hidden !important;
+      padding:0 8px 8px !important;
+      box-sizing:border-box;
+      display:flex !important;
+      flex-direction:column !important;
+    }
+
+    /* 頂端控制列：手機兩排 */
+    .control-bar{
+      flex:0 0 auto;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:6px !important;
+      padding:6px 0 !important;
+      min-height:0 !important;
+      height:auto !important;
+      overflow:visible !important;
+      background:var(--bg) !important;
+    }
+    .control-left,
+    .control-right{
+      display:flex !important;
+      align-items:center !important;
+      gap:5px !important;
+      flex-wrap:wrap !important;
+      min-width:0 !important;
+    }
+    .control-right{
+      justify-content:flex-start !important;
+    }
+
+    /* 日期標題縮小 */
+    .control-bar .title-group h1{
+      font-size:16px !important;
+      line-height:1.2 !important;
+      margin:0 !important;
+    }
+    .control-bar .today-tag{
+      font-size:10px !important;
+    }
+
+    /* 控制項手機尺寸 */
+    .control-bar .btn,
+    .control-bar input[type=date],
+    .control-bar select,
+    .control-bar .theme-switch,
+    .control-bar .segmented{
+      height:32px !important;
+      font-size:12px !important;
+    }
+    .control-bar .btn{
+      padding:0 9px !important;
+    }
+    .control-bar input[type=date]{
+      width:136px !important;
+    }
+    .control-bar select{
+      min-width:104px !important;
+      max-width:145px !important;
+    }
+    .room-filter-btn{
+      min-width:112px !important;
+    }
+    .readonly-pill{
+      height:28px !important;
+      font-size:11px !important;
+    }
+
+    /* 前一天/今天/後一天在手機保留但更緊湊 */
+    .nav-date-btn{
+      padding:0 8px !important;
+    }
+
+    /* 課表容器 */
+    #dayView,
+    #rangeView{
+      flex:1 1 auto !important;
+      min-height:0 !important;
+      width:100% !important;
+      overflow:auto !important;
+      -webkit-overflow-scrolling:touch;
+      border-radius:12px !important;
+    }
+
+    /* 日檢視：時間欄 sticky，教室維持可橫向滑動 */
+    #dayView .schedule{
+      min-width:max-content !important;
+      width:max-content !important;
+    }
+    #dayView .schedule thead th:first-child,
+    #dayView .schedule tbody th{
+      position:sticky !important;
+      left:0 !important;
+      z-index:12 !important;
+    }
+    #dayView .schedule thead th:first-child{
+      z-index:15 !important;
+    }
+    #dayView .schedule th:first-child{
+      width:72px !important;
+      min-width:72px !important;
+      max-width:72px !important;
+    }
+    #dayView .schedule thead th:not(:first-child),
+    #dayView .schedule td{
+      width:138px !important;
+      min-width:138px !important;
+      max-width:138px !important;
+    }
+
+    /* 課程卡手機字體 */
+    #dayView .course-card{
+      font-size:11px !important;
+      padding:6px !important;
+    }
+    #dayView .course-title{
+      font-size:11px !important;
+    }
+    #dayView .course-meta{
+      font-size:9px !important;
+    }
+
+    /* 週檢視：保持 Grid，但可左右滑 */
+    .week-grid{
+      min-width:900px !important;
+      grid-template-columns:82px repeat(7,116px) !important;
+    }
+    .week-grid-room{
+      position:sticky !important;
+      left:0 !important;
+      z-index:4 !important;
+    }
+    .week-grid-head:first-child{
+      position:sticky !important;
+      left:0 !important;
+      z-index:6 !important;
+    }
+    .week-grid-day .mini-course{
+      font-size:10px !important;
+    }
+
+    /* 月檢視：固定欄 + 可左右滑 */
+    #rangeView .range-table{
+      min-width:max-content !important;
+    }
+    #rangeView .range-table th:first-child,
+    #rangeView .range-table td:first-child{
+      position:sticky !important;
+      left:0 !important;
+      z-index:4 !important;
+    }
+    #rangeView .range-table thead th:first-child{
+      z-index:6 !important;
+    }
+
+    /* tooltip 以手機寬度限制 */
+    .course-detail-tooltip{
+      max-width:calc(100vw - 28px) !important;
+      min-width:220px !important;
+      font-size:11px !important;
+    }
+
+    /* 教室篩選 modal 手機化 */
+    .room-filter-modal{
+      width:calc(100vw - 20px) !important;
+      max-height:calc(100dvh - 28px) !important;
+    }
+    .room-filter-list{
+      grid-template-columns:1fr !important;
+      max-height:55dvh !important;
+    }
+
+    /* 深淺色控制不要過寬 */
+    .theme-switch button,
+    .segmented button{
+      padding:0 9px !important;
+    }
+
+    /* 載入遮罩 */
+    .schedule-loading{
+      top:82px !important;
+    }
+
+    /* 很窄手機再精簡 */
+    @media(max-width:430px){
+      .sidebar{
+        padding:6px !important;
+      }
+      .main{
+        padding:0 6px 6px !important;
+      }
+      .stats-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      }
+      .legend-list{
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+      }
+      .control-bar .title-group{
+        width:100%;
+      }
+      .control-bar .title-group h1{
+        font-size:15px !important;
+      }
+      .control-bar input[type=date]{
+        width:128px !important;
+      }
+    }
+
+
+    /* ===== Mobile Agenda redesign ===== */
+    body{background:var(--bg);}
+    .layout{display:block!important;height:100dvh!important;overflow:hidden!important;}
+    .sidebar{display:none!important;}
+    .mobile-main{
+      height:100dvh!important;
+      width:100%!important;
+      padding:0!important;
+      overflow:hidden!important;
+      display:flex!important;
+      flex-direction:column!important;
+      background:var(--bg);
+    }
+
+    .mobile-topbar{
+      flex:0 0 auto;
+      padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;
+      background:var(--panel);
+      border-bottom:1px solid var(--line);
+      box-shadow:0 4px 14px rgba(31,45,68,.06);
+      z-index:20;
+    }
+    .mobile-date-row{
+      display:grid;
+      grid-template-columns:38px 1fr 38px;
+      align-items:center;
+      gap:8px;
+    }
+    .mobile-icon-btn{
+      width:38px;height:38px;border:1px solid var(--line);border-radius:10px;
+      background:var(--panel);color:var(--text);font-size:24px;line-height:1;cursor:pointer;
+    }
+    .mobile-date-title{
+      height:40px;border:0;background:transparent;color:var(--text);
+      font-size:18px;font-weight:800;text-align:center;cursor:pointer;
+    }
+
+    .mobile-view-row{
+      margin-top:8px;
+      display:grid;
+      grid-template-columns:auto auto minmax(100px,1fr) 40px;
+      gap:6px;
+      align-items:center;
+    }
+    .mobile-segmented{
+      display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);
+    }
+    .mobile-segmented button{
+      height:34px;min-width:40px;padding:0 10px;border:0;border-right:1px solid var(--line);
+      background:transparent;color:var(--text);font-size:13px;font-weight:700;
+    }
+    .mobile-segmented button:last-child{border-right:0;}
+    .mobile-segmented button.active{background:var(--blue);color:#fff;}
+    .mobile-filter-btn{height:34px!important;padding:0 9px!important;font-size:12px!important;}
+    .mobile-view-row select{
+      height:34px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);
+      padding:0 8px;font-size:12px;min-width:0;
+    }
+    .mobile-theme-btn{
+      width:40px;height:34px;border:1px solid var(--line);border-radius:9px;
+      background:var(--panel);color:var(--text);font-size:16px;
+    }
+
+    .mobile-summary-row{
+      margin-top:8px;
+      display:flex;align-items:center;justify-content:space-between;gap:8px;
+      color:var(--muted);font-size:12px;
+    }
+    .mobile-today-btn{
+      height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;
+      background:var(--blue-soft);color:var(--blue);font-size:11px;font-weight:700;
+    }
+    .mobile-legend{
+      margin-top:7px;display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:10px;
+    }
+    .mobile-legend span{display:inline-flex;align-items:center;gap:4px;}
+    .mobile-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;}
+
+    .mobile-view-panel{
+      flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;
+      padding:10px 12px calc(env(safe-area-inset-bottom,0px) + 18px);
+      box-sizing:border-box;
+    }
+
+    /* Agenda day */
+    .agenda-empty{
+      margin:40px auto;text-align:center;color:var(--muted);font-size:13px;
+    }
+    .agenda-time-group{margin-bottom:14px;}
+    .agenda-time-label{
+      position:sticky;top:-1px;z-index:3;
+      display:flex;align-items:center;gap:8px;
+      margin:0 -2px 6px;padding:5px 2px;
+      background:var(--bg);color:var(--muted);font-size:11px;font-weight:800;
+    }
+    .agenda-time-label:after{content:"";height:1px;background:var(--line);flex:1;}
+    .agenda-card{
+      position:relative;
+      display:block;width:100%;box-sizing:border-box;
+      padding:11px 12px 10px 14px;margin-bottom:7px;
+      border:1px solid rgba(0,0,0,.06);border-radius:12px;
+      color:#172033;box-shadow:0 3px 10px rgba(31,45,68,.07);
+      overflow:hidden;
+    }
+    .agenda-card::before{
+      content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+      background:rgba(0,0,0,.10);
+    }
+    .agenda-card-title{
+      font-size:14px;font-weight:800;line-height:1.35;margin-right:8px;word-break:break-word;
+    }
+    .agenda-card-meta{
+      margin-top:5px;display:flex;flex-wrap:wrap;gap:5px 10px;
+      font-size:11px;line-height:1.35;color:rgba(23,32,51,.78);
+    }
+    .agenda-card-meta span{white-space:nowrap;}
+    html[data-theme="dark"] .agenda-card{
+      box-shadow:0 4px 14px rgba(0,0,0,.22);
+      border-color:rgba(255,255,255,.08);
+    }
+
+    /* Week = day tabs + agenda */
+    .mobile-week-tabs{
+      position:sticky;top:0;z-index:6;
+      display:grid;grid-template-columns:repeat(7,minmax(54px,1fr));
+      gap:5px;padding:2px 0 8px;background:var(--bg);
+      overflow-x:auto;
+    }
+    .mobile-week-tab{
+      border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);
+      min-width:54px;padding:7px 3px;font-size:10px;text-align:center;
+    }
+    .mobile-week-tab b{display:block;font-size:12px;margin-top:2px;}
+    .mobile-week-tab.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+
+    /* Month calendar */
+    .mobile-month-card{
+      background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;
+    }
+    .mobile-month-head{
+      display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;
+    }
+    .mobile-month-head button{
+      width:34px;height:34px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--text);
+    }
+    .mobile-month-head strong{font-size:16px;}
+    .mobile-month-grid{
+      display:grid;grid-template-columns:repeat(7,1fr);gap:4px;
+    }
+    .mobile-month-week{
+      text-align:center;color:var(--muted);font-size:10px;padding:4px 0;
+    }
+    .mobile-month-day{
+      min-height:48px;border:0;border-radius:10px;background:transparent;color:var(--text);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px 2px;
+    }
+    .mobile-month-day.muted{color:#b5becb;}
+    .mobile-month-day.selected{background:var(--blue);color:#fff;}
+    .mobile-month-dots{display:flex;gap:2px;min-height:6px;max-width:38px;overflow:hidden;}
+    .mobile-month-dots i{width:5px;height:5px;border-radius:50%;display:block;flex:0 0 5px;}
+
+    /* Detail bottom sheet */
+    .mobile-detail-sheet{
+      position:fixed;z-index:3000;left:0;right:0;bottom:0;
+      transform:translateY(110%);transition:transform .2s ease;
+      background:var(--panel);border-radius:18px 18px 0 0;border:1px solid var(--line);
+      padding:10px 14px calc(env(safe-area-inset-bottom,0px) + 18px);
+      box-shadow:0 -12px 30px rgba(0,0,0,.18);
+      max-height:70dvh;overflow:auto;
+    }
+    .mobile-detail-sheet.show{transform:translateY(0);}
+    .mobile-detail-handle{width:42px;height:4px;border-radius:99px;background:#c6ced9;margin:0 auto 10px;}
+    .mobile-detail-title{font-size:16px;font-weight:800;margin-bottom:8px;}
+    .mobile-detail-row{display:grid;grid-template-columns:78px 1fr;gap:8px;padding:4px 0;font-size:12px;}
+    .mobile-detail-row .k{color:var(--muted);font-weight:700;white-space:nowrap;}
+    .mobile-detail-close{
+      width:100%;height:40px;margin-top:12px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:800;
+    }
+
+    /* hide desktop leftovers that may still exist */
+    #dayView,#rangeView,.control-bar{display:none!important;}
+
+
+    /* Mobile boot state */
+    #mobileDayView:empty::before{
+      content:"載入課表中…";
+      display:block;
+      margin:48px auto;
+      text-align:center;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+
+    /* ===== Mobile 詳細資訊 Bottom Sheet 修正 ===== */
+    .mobile-detail-backdrop{
+      position:fixed;
+      z-index:2990;
+      inset:0;
+      background:rgba(15,23,42,.46);
+      opacity:0;
+      visibility:hidden;
+      pointer-events:none;
+      transition:opacity .18s ease,visibility .18s ease;
+      -webkit-backdrop-filter:blur(2px);
+      backdrop-filter:blur(2px);
+    }
+    .mobile-detail-backdrop.show{
+      opacity:1;
+      visibility:visible;
+      pointer-events:auto;
+    }
+
+    .mobile-detail-sheet{
+      z-index:3000 !important;
+      background:#ffffff !important;
+      color:#172033 !important;
+      opacity:1 !important;
+      isolation:isolate;
+      border:1px solid #dbe4ef !important;
+      box-shadow:0 -16px 42px rgba(15,23,42,.24) !important;
+    }
+    .mobile-detail-sheet::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      z-index:-1;
+      border-radius:18px 18px 0 0;
+      background:#ffffff;
+    }
+    .mobile-detail-sheet .mobile-detail-title{
+      color:#172033 !important;
+    }
+    .mobile-detail-sheet .mobile-detail-row{
+      color:#172033 !important;
+    }
+    .mobile-detail-sheet .mobile-detail-row .k{
+      color:#64748b !important;
+    }
+
+    html[data-theme="dark"] .mobile-detail-sheet{
+      background:#182536 !important;
+      color:#eef4fb !important;
+      border-color:#34475d !important;
+      box-shadow:0 -16px 42px rgba(0,0,0,.48) !important;
+    }
+    html[data-theme="dark"] .mobile-detail-sheet::before{
+      background:#182536 !important;
+    }
+    html[data-theme="dark"] .mobile-detail-sheet .mobile-detail-title,
+    html[data-theme="dark"] .mobile-detail-sheet .mobile-detail-row{
+      color:#eef4fb !important;
+    }
+    html[data-theme="dark"] .mobile-detail-sheet .mobile-detail-row .k{
+      color:#9fb2c9 !important;
+    }
+    html[data-theme="dark"] .mobile-detail-backdrop{
+      background:rgba(0,0,0,.62);
+    }
+
+    body.mobile-detail-open{
+      overflow:hidden !important;
+      touch-action:none;
+    }
+
+
+    /* 月份切換：框架先顯示，色點背景載入 */
+    .mobile-month-day{
+      transition:background-color .12s ease,color .12s ease;
+    }
+
+  
+/* =====================================================================
+   Carbon 主題層（index.html / admin.html / mobile.html 共用）
+   ---------------------------------------------------------------------
+   放置位置：每個檔案「最後一個 style 結束標籤之前」，讓它在層疊順序上最後生效。
+   設計依據：IBM Carbon Design System v11
+     ‧ 淺色 = g10 主題（底 #f4f4f4、圖層 #ffffff）
+     ‧ 深色 = g100 主題（底 #161616、圖層 #262626）
+   覆寫手法：
+     ‧ 所有選擇器以 html:not(#cds):not(#cds-x) 開頭。每個 :not(#id) 會讓權重多一個 ID 等級，
+       兩個就能穩定蓋過原本的 class 規則，以及 html[data-theme="dark"] #dayView … 這類含 ID 的規則。
+       （#cds、#cds-x 是頁面上不存在的 ID，只用來提高權重，不會選到任何元素）
+     ‧ 原檔有少數 !important，因此本層對顏色、邊框類屬性也加 !important。
+     ‧ 刻意「不」覆寫由 JS 寫在 style 屬性上的值（課程卡底色、色點顏色），
+       保留使用者自訂的課程類別色標。
+   要換回原本外觀：直接刪除這整段即可，不影響任何功能。
+   ===================================================================== */
+
+/* ---------- 1. 設計代幣（Design Tokens） ---------- */
+:root{
+  /* 字體：英數優先 IBM Plex Sans，中文使用微軟正黑體 */
+  --cds-font:"IBM Plex Sans","Microsoft JhengHei UI","Microsoft JhengHei","Noto Sans TC","Segoe UI",Arial,sans-serif;
+  --cds-mono:"IBM Plex Mono",Consolas,"Courier New",monospace;
+  /* g10 淺色主題 */
+  --cds-background:#f4f4f4;        /* 頁面底色 */
+  --cds-layer:#ffffff;             /* 第一層（面板、表格） */
+  --cds-layer-2:#f4f4f4;           /* 第二層（面板內的區塊） */
+  --cds-layer-hover:#e8e8e8;       /* 滑過 */
+  --cds-layer-selected:#e0e0e0;    /* 選取 */
+  --cds-field:#ffffff;             /* 輸入框底色（在灰底上） */
+  --cds-field-2:#f4f4f4;           /* 輸入框底色（在白色面板上） */
+  --cds-border-subtle:#e0e0e0;     /* 細分隔線 */
+  --cds-border-strong:#e0e0e0;     /* 輸入框底線：與分隔線同色，全站線條統一 */
+  --cds-text:#161616;              /* 主要文字 */
+  --cds-text-2:#525252;            /* 次要文字 */
+  --cds-text-3:#6f6f6f;            /* 說明文字（V2.5.6 --helper） */
+  --cds-placeholder:#a8a8a8;       /* 輸入框提示文字（V2.5.6 --placeholder） */
+  --cds-text-disabled:#c6c6c6;
+  /* 主色：與「鑰匙、設備與庫存管理後台」V2.5.6 相同的深藍 */
+  --cds-interactive:#1e3a8a;       /* 主要按鈕、選取、勾選框（V2.5.6 --navy） */
+  --cds-interactive-hover:#172b66; /* 滑過（--navy-dark） */
+  --cds-interactive-active:#0f1d45;/* 按下（--navy-press） */
+  --cds-link:#1e3a8a;
+  --cds-focus:#1e3a8a;             /* 焦點外框 */
+  --cds-highlight:#e8eefc;         /* 選取的淡藍底（--navy-soft） */
+  --cds-amber:#d97706;             /* 琥珀橘：數字徽章、提示色條（--amber） */
+  --cds-btn-secondary:#ffffff;     /* 次要按鈕改白底，不用深灰 */
+  --cds-btn-secondary-hover:#e8e8e8;
+  --cds-inverse:#ffffff;           /* 提示框、通知底色（改淺色，不用深灰） */
+  --cds-inverse-text:#161616;
+  --cds-success:#24a148;  --cds-success-bg:#defbe6;  --cds-success-text:#0e6027;
+  --cds-warning:#f1c21b;  --cds-warning-bg:#fcf4d6;  --cds-warning-text:#8e6a00;
+  --cds-error:#da1e28;    --cds-error-bg:#fff1f1;    --cds-error-text:#a2191f;
+  --cds-info-bg:#e8eefc;  --cds-info-text:#1e3a8a;
+  --cds-overlay:rgba(22,22,22,.5);
+}
+/* g100 深色主題：只換代幣，元件規則共用 */
+html[data-theme="dark"]{
+  --cds-background:#161616;
+  --cds-layer:#262626;
+  --cds-layer-2:#393939;
+  --cds-layer-hover:#333333;
+  --cds-layer-selected:#525252;
+  --cds-field:#262626;
+  --cds-field-2:#393939;
+  --cds-border-subtle:#393939;
+  --cds-border-strong:#393939;
+  --cds-text:#f4f4f4;
+  --cds-text-2:#c6c6c6;
+  --cds-text-3:#a8a8a8;
+  --cds-text-disabled:#525252;
+  --cds-link:#a9bdf2;
+  --cds-focus:#ffffff;
+  --cds-highlight:#172b66;
+  --cds-btn-secondary:#262626;
+  --cds-btn-secondary-hover:#333333;
+  --cds-inverse:#262626;
+  --cds-inverse-text:#f4f4f4;
+  --cds-success-bg:#044317;  --cds-success-text:#a7f0ba;
+  --cds-warning-bg:#483700;  --cds-warning-text:#fddc69;
+  --cds-error-bg:#520408;    --cds-error-text:#ffb3b8;
+  --cds-info-bg:#172b66;     --cds-info-text:#c7d5f7;
+  --cds-overlay:rgba(0,0,0,.65);
+}
+/* 讓原檔仍在使用的舊變數也指向 Carbon 代幣，未個別覆寫的地方自動跟著變 */
+html:not(#cds):not(#cds-x){
+  --blue:var(--cds-interactive);--blue2:var(--cds-interactive-hover);--blue-soft:var(--cds-highlight);
+  --ink:var(--cds-text);--muted:var(--cds-text-2);--line:var(--cds-border-subtle);
+  --bg:var(--cds-background);--card:var(--cds-layer);
+  --green:var(--cds-success);--red:var(--cds-error);--orange:#ff832b;
+  --shadow:none;--radius:0;
+}
+
+/* ---------- 2. 全域：直角、無陰影、字體 ---------- */
+html:not(#cds):not(#cds-x) body{font-family:var(--cds-font)!important;background:var(--cds-background)!important;color:var(--cds-text)!important;letter-spacing:.16px}
+html:not(#cds):not(#cds-x) body *{border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important}
+/* 例外：只有色點、色票、載入圈維持圓形；標籤、徽章、狀態膠囊一律直角 */
+html:not(#cds):not(#cds-x) body :is(.dot,.month-course-dot,.color-swatch,.custom-color-preview,.schedule-spinner,.spinner,.mobile-month-dots *,.legend-item i){border-radius:999px!important}
+html:not(#cds):not(#cds-x) body :is(input,select,textarea,button){font-family:var(--cds-font)!important}
+/* 焦點：Carbon 用 2px 內框，鍵盤操作才顯示 */
+html:not(#cds):not(#cds-x) body :is(button,a,input,select,textarea,[tabindex]):focus-visible{outline:2px solid var(--cds-focus)!important;outline-offset:-2px!important}
+/* 數字使用等寬數字，時間、統計值對齊 */
+html:not(#cds):not(#cds-x) body :is(.slot-code,.slot-time,.halfhour-label,.side-stat strong,.stat-value,.cal-day){font-variant-numeric:tabular-nums}
+
+/* ---------- 3. 版面與面板（Carbon Tile：白底、無外框） ---------- */
+html:not(#cds):not(#cds-x) body .layout{gap:1px!important;padding:0!important;background:var(--cds-background)!important}
+html:not(#cds):not(#cds-x) body .sidebar{background:var(--cds-layer)!important;border-right:1px solid var(--cds-border-subtle)!important;padding:0!important}
+html:not(#cds):not(#cds-x) body .main{padding:8px 16px 16px!important;gap:8px!important}
+html:not(#cds):not(#cds-x) body .panel{background:var(--cds-layer)!important;border:0!important}
+html:not(#cds):not(#cds-x) body .side-panel{margin:0!important;padding:16px!important;border-bottom:1px solid var(--cds-border-subtle)!important}
+/* 面板標題：Carbon 的 heading-compact-01，黑字不用藍字 */
+html:not(#cds):not(#cds-x) body .panel-title,html:not(#cds):not(#cds-x) body .tip-title{color:var(--cds-text)!important;font-size:14px!important;font-weight:600!important;letter-spacing:.16px}
+html:not(#cds):not(#cds-x) body .tips,html:not(#cds):not(#cds-x) body .side-legend,html:not(#cds):not(#cds-x) body .quick-item{color:var(--cds-text-2)!important}
+
+/* ---------- 4. 頂部列（Carbon UI Shell Header：#161616、高 48px） ---------- */
+html:not(#cds):not(#cds-x) body .topbar{background:#161616!important;color:#f4f4f4!important;border-bottom:1px solid #393939!important}
+html:not(#cds):not(#cds-x) body .topbar{height:48px!important;padding:0 16px!important}
+html:not(#cds):not(#cds-x) body .top-search input{background:#262626!important;color:#f4f4f4!important;border:0!important;border-bottom:1px solid #6f6f6f!important;height:32px!important}
+html:not(#cds):not(#cds-x) body .top-search button{background:var(--cds-interactive)!important;color:#fff!important;height:32px!important}
+
+
+/* ---------- 5. 按鈕（Carbon Button） ---------- */
+/* 一般按鈕 → Tertiary（藍框藍字），高度 32px（sm） */
+html:not(#cds):not(#cds-x) body :is(.btn,.ghost-btn,.room-filter-btn,.sidebar-collapse-btn,.nav-date-btn,.mobile-today-btn,.mobile-filter-btn,.mobile-icon-btn,.mobile-theme-btn,.top-icon-btn,.theme-toggle-btn){
+  background:transparent!important;color:var(--cds-text)!important;border:1px solid var(--cds-border-subtle)!important;font-weight:400!important;transition:background .11s cubic-bezier(.2,0,.38,.9)}
+html:not(#cds):not(#cds-x) body :is(.btn,.ghost-btn,.room-filter-btn,.sidebar-collapse-btn,.nav-date-btn,.mobile-today-btn,.mobile-filter-btn,.mobile-icon-btn,.mobile-theme-btn,.top-icon-btn,.theme-toggle-btn):hover{background:var(--cds-layer-hover)!important}
+/* 主要按鈕 → Primary（藍底白字） */
+html:not(#cds):not(#cds-x) body :is(.btn-primary,.quick-btn.primary,.btn.primary){background:var(--cds-interactive)!important;color:#fff!important;border-color:var(--cds-interactive)!important}
+html:not(#cds):not(#cds-x) body :is(.btn-primary,.quick-btn.primary,.btn.primary):hover{background:var(--cds-interactive-hover)!important}
+html:not(#cds):not(#cds-x) body :is(.btn-primary,.quick-btn.primary,.btn.primary):active{background:var(--cds-interactive-active)!important}
+/* 危險按鈕 → Danger（紅底白字） */
+html:not(#cds):not(#cds-x) body .btn-danger{background:var(--cds-error)!important;color:#fff!important;border-color:var(--cds-error)!important}
+html:not(#cds):not(#cds-x) body .btn-danger:hover{background:#b81921!important}
+/* 警示按鈕 → 黃色系 */
+html:not(#cds):not(#cds-x) body .btn-warning{background:var(--cds-warning-bg)!important;color:var(--cds-warning-text)!important;border-color:var(--cds-warning)!important}
+/* 側欄快速功能鈕 → Icon-only Ghost button */
+html:not(#cds):not(#cds-x) body .quick-btn{background:transparent!important;color:var(--cds-text-2)!important;transform:none!important}
+html:not(#cds):not(#cds-x) body .quick-btn:hover{background:var(--cds-layer-hover)!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body button:disabled{background:var(--cds-layer-selected)!important;color:var(--cds-text-disabled)!important;border-color:transparent!important;cursor:not-allowed!important;opacity:1!important}
+
+/* ---------- 6. 輸入元件（Carbon Field：只有底線） ---------- */
+html:not(#cds):not(#cds-x) body :is(.field input,.field select,.field textarea,.select-full,.control-bar input[type=date],.control-bar select,.search-modal-row input,.vacancy-continuous-controls select,.mobile-view-row select,select,input[type=date],input[type=text],input[type=search],input[type=number],input[type=time],textarea){
+  background-color:var(--cds-field)!important;color:var(--cds-text)!important;
+  border:0!important;border-bottom:1px solid var(--cds-border-strong)!important}
+/* 白色面板內的輸入框改用灰底，維持 Carbon 的層次對比 */
+html:not(#cds):not(#cds-x) body :is(.modal,.sidebar,.side-panel) :is(input,select,textarea){background-color:var(--cds-field-2)!important}
+html:not(#cds):not(#cds-x) body :is(input,select,textarea):focus{outline:2px solid var(--cds-focus)!important;outline-offset:-2px!important}
+html:not(#cds):not(#cds-x) body .field label{color:var(--cds-text-2)!important;font-size:12px!important;font-weight:400!important;letter-spacing:.32px}
+html:not(#cds):not(#cds-x) body ::placeholder{color:var(--cds-placeholder,#a8a8a8)!important}
+
+/* ---------- 7. 工具列、分段切換（Content Switcher） ---------- */
+html:not(#cds):not(#cds-x) body .control-bar .title-group h1,html:not(#cds):not(#cds-x) body .page-head h1{font-weight:400!important;font-size:20px!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .control-divider{background:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body :is(.segmented,.theme-switch,.vacancy-mode-tabs,.mobile-segmented,.mobile-week-tabs){border:1px solid var(--cds-border-subtle)!important;background:transparent!important;gap:0!important}
+html:not(#cds):not(#cds-x) body :is(.segmented,.theme-switch,.vacancy-mode-tabs,.mobile-segmented,.mobile-week-tabs) button{background:transparent!important;color:var(--cds-text-2)!important;border:0!important;border-right:1px solid var(--cds-border-subtle)!important;font-weight:400!important}
+html:not(#cds):not(#cds-x) body :is(.segmented,.theme-switch,.vacancy-mode-tabs,.mobile-segmented,.mobile-week-tabs) button:last-child{border-right:0!important}
+html:not(#cds):not(#cds-x) body :is(.segmented,.theme-switch,.vacancy-mode-tabs,.mobile-segmented,.mobile-week-tabs) button:hover{background:var(--cds-layer-hover)!important;color:var(--cds-text)!important}
+/* 選中：Carbon content switcher 選中為反白（黑底白字） */
+html:not(#cds):not(#cds-x) body :is(.segmented,.theme-switch,.vacancy-mode-tabs,.mobile-segmented,.mobile-week-tabs) button.active,
+html:not(#cds):not(#cds-x) body .mobile-week-tab.active{background:var(--cds-interactive)!important;color:#fff!important;font-weight:600!important}
+
+/* ---------- 8. 標籤（Carbon Tag：圓角膠囊） ---------- */
+html:not(#cds):not(#cds-x) body :is(.today-tag,.sync-pill,.readonly-pill){background:var(--cds-info-bg)!important;color:var(--cds-info-text)!important;border:1px solid var(--cds-border-subtle)!important;font-weight:400!important;font-size:12px!important;height:24px!important;padding:0 8px!important;display:inline-flex;align-items:center;gap:4px}
+
+/* ---------- 9. 小月曆（Carbon DatePicker） ---------- */
+html:not(#cds):not(#cds-x) body .cal-head{font-weight:600!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .cal-nav button{color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .cal-nav button:hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body .cal-week{color:var(--cds-text)!important;font-weight:400}
+html:not(#cds):not(#cds-x) body .cal-grid{gap:0!important}
+html:not(#cds):not(#cds-x) body .cal-day{color:var(--cds-text)!important;padding:9px 0!important}
+html:not(#cds):not(#cds-x) body .cal-day:hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body .cal-day.muted{color:var(--cds-text-disabled)!important}
+html:not(#cds):not(#cds-x) body .cal-day.today{outline:0!important;color:var(--cds-interactive)!important;font-weight:600!important;position:relative}
+/* 今天不加小點，只用深藍粗體字標示；選取日為深藍底白字 */
+html:not(#cds):not(#cds-x) body .cal-day::after{content:none!important;display:none!important}
+html:not(#cds):not(#cds-x) body .cal-day.selected{background:var(--cds-interactive)!important;color:#fff!important;font-weight:400!important}
+
+/* ---------- 10. 側欄統計（Carbon 資料列，無卡片外框） ---------- */
+html:not(#cds):not(#cds-x) body .side-stats{gap:1px!important;background:var(--cds-border-subtle)}
+html:not(#cds):not(#cds-x) body .side-stat{background:var(--cds-layer)!important;border:0!important;padding:12px!important}
+html:not(#cds):not(#cds-x) body .side-stat-icon{background:var(--cds-layer-2)!important}
+html:not(#cds):not(#cds-x) body .side-stat small{color:var(--cds-text-2)!important;font-size:12px!important}
+html:not(#cds):not(#cds-x) body .side-stat strong{font-size:20px!important;font-weight:400!important;color:var(--cds-text)!important}
+
+/* 各檢視捲動容器 */
+html:not(#cds):not(#cds-x) body :is(#dayView,#rangeView,#rangeContent,#vacancyView){background:var(--cds-layer)!important}
+
+/* ---------- 11. 日課表（Carbon DataTable 風格） ---------- */
+html:not(#cds):not(#cds-x) body .schedule th,html:not(#cds):not(#cds-x) body .schedule td{border-color:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .schedule thead th{background:var(--cds-layer-selected)!important;color:var(--cds-text)!important;font-weight:600!important;font-size:14px!important}
+html:not(#cds):not(#cds-x) body .schedule thead th small,html:not(#cds):not(#cds-x) body .schedule thead th span{color:var(--cds-text-2)!important;font-weight:400!important}
+html:not(#cds):not(#cds-x) body .schedule tbody th{background:var(--cds-layer-2)!important;color:var(--cds-text-2)!important;font-weight:400!important}
+html:not(#cds):not(#cds-x) body .schedule td{background:var(--cds-layer)!important}
+html:not(#cds):not(#cds-x) body #dayView .schedule tbody tr:nth-child(even) :is(td,th){background:var(--cds-layer)!important}
+html:not(#cds):not(#cds-x) body #dayView .schedule tbody tr:nth-child(even) th{background:var(--cds-layer-2)!important}
+html:not(#cds):not(#cds-x) body .schedule td:hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body :is(.slot-code){color:var(--cds-text)!important;font-weight:400!important}
+html:not(#cds):not(#cds-x) body :is(.slot-time,.halfhour-label){color:var(--cds-text-3)!important}
+/* 課程卡：保留使用者色標底色，改成直角＋左側 3px 色條 */
+html:not(#cds):not(#cds-x) body .course-card{border:0!important;border-left:3px solid var(--cds-card-bar,#8d8d8d)!important;padding:6px 8px 6px 9px!important}
+html:not(#cds):not(#cds-x) body .course-card:hover{filter:brightness(.96)}
+html:not(#cds):not(#cds-x) body .course-title{font-weight:600!important}
+/* 現在時間線：Carbon 紅色指示 */
+html:not(#cds):not(#cds-x) body .current-time-line{background:var(--cds-error)!important}
+html:not(#cds):not(#cds-x) body .current-time-line *{background:var(--cds-error)!important;color:#fff!important}
+html:not(#cds):not(#cds-x) body .drop-target.drag-over{outline:2px dashed var(--cds-interactive)!important;background:var(--cds-highlight)!important}
+
+/* ---------- 12. 週／月／範圍表 ---------- */
+html:not(#cds):not(#cds-x) body :is(.range-table,.week-range-table,.vacancy-week-table,.import-preview-table) :is(th,td){border-color:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body :is(.range-table,.week-range-table,.vacancy-week-table,.import-preview-table) th{background:var(--cds-layer-selected)!important;color:var(--cds-text)!important;font-weight:600!important}
+html:not(#cds):not(#cds-x) body :is(.range-table,.week-range-table,.vacancy-week-table,.import-preview-table) td{background:var(--cds-layer)!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body :is(.week-grid-head,.week-grid-room){background:var(--cds-layer-selected)!important;color:var(--cds-text)!important;border-color:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body :is(.week-grid-cell,.week-grid-day){background:var(--cds-layer)!important;border-color:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .mini-course{border-left:3px solid var(--cds-card-bar,#8d8d8d)!important}
+/* 手機議程卡、月曆卡：左側邊條也跟著 --cds-card-bar（自訂色彩由程式算出同色系深色） */
+html:not(#cds):not(#cds-x) body :is(.agenda-card,.mobile-month-card){border-left:3px solid var(--cds-card-bar,#8d8d8d)!important}
+
+/* ---------- 13. 空堂查詢 ---------- */
+html:not(#cds):not(#cds-x) body :is(.vacancy-shell,.vacancy-day-card,.vacancy-toolbar){background:var(--cds-layer)!important;border:0!important}
+html:not(#cds):not(#cds-x) body .vacancy-day-head{background:var(--cds-layer-selected)!important;color:var(--cds-text)!important;border:0!important}
+html:not(#cds):not(#cds-x) body :is(.vacancy-chip,.vacancy-room-chip){background:var(--cds-success-bg)!important;color:var(--cds-success-text)!important;border:0!important}
+html:not(#cds):not(#cds-x) body :is(.is-free,.legend-free){background:var(--cds-success-bg)!important;color:var(--cds-success-text)!important;border-color:transparent!important}
+html:not(#cds):not(#cds-x) body :is(.is-busy,.legend-busy){background:var(--cds-error-bg)!important;color:var(--cds-error-text)!important;border-color:transparent!important}
+html:not(#cds):not(#cds-x) body .vacancy-cell-button{border:0!important}
+html:not(#cds):not(#cds-x) body .vacancy-cell-button:hover{outline:2px solid var(--cds-interactive)!important;outline-offset:-2px}
+html:not(#cds):not(#cds-x) body :is(.vacancy-more,.vacancy-none,.vacancy-room-modal-item){background:var(--cds-layer-2)!important;color:var(--cds-text-2)!important;border:0!important}
+
+/* ---------- 14. 對話框（Carbon Modal） ---------- */
+html:not(#cds):not(#cds-x) body .modal-overlay{background:var(--cds-overlay)!important}
+html:not(#cds):not(#cds-x) body .modal{background:var(--cds-layer)!important;color:var(--cds-text)!important;border:0!important;padding:16px 16px 0!important}
+html:not(#cds):not(#cds-x) body .modal h2{font-size:20px!important;font-weight:400!important;color:var(--cds-text)!important}
+/* 對話框底部按鈕列
+   ‧ 按鈕高 40px，文字上下、左右都置中
+   ‧ 按鈕平均分配寬度，間距 8px；上方一條統一線色
+   ‧ 次要按鈕（取消、只改當天…）一律白底＋線框；主要按鈕深藍；危險按鈕紅色 */
+html:not(#cds):not(#cds-x) body .modal-actions{display:flex!important;flex-wrap:wrap!important;gap:8px!important;margin:24px -16px 0!important;padding:12px 16px!important;background:var(--cds-layer)!important;border-top:1px solid var(--cds-border-subtle)!important;align-items:center!important}
+html:not(#cds):not(#cds-x) body .modal-actions .btn{flex:1 1 0!important;min-width:0;height:40px!important;min-height:40px!important;padding:0 12px!important;margin:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;line-height:1.2!important;font-size:14px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html:not(#cds):not(#cds-x) body .modal-actions .btn:not(.btn-primary):not(.btn-danger),html:not(#cds):not(#cds-x) body .modal-actions .btn:not(.btn-primary):not(.btn-danger):focus{background:var(--cds-layer)!important;color:var(--cds-text)!important;border:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .modal-actions .btn:not(.btn-primary):not(.btn-danger):hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body .modal-actions :is(.btn-primary,.btn-danger){border:1px solid transparent!important}
+/* 修改重複課程時，按鈕列上方的說明文字獨立一行 */
+html:not(#cds):not(#cds-x) body .modal-actions .edit-scope-note{flex:1 0 100%!important;margin:0 0 4px!important;font-size:12px!important;line-height:1.5;color:var(--cds-text-2)!important;text-align:left}
+/* 抽屜（新增／修改課程）的按鈕列貼齊底部 */
+html:not(#cds):not(#cds-x) body :is(#typeModal,#courseModal) .modal-actions{flex:none;margin:0!important}
+html:not(#cds):not(#cds-x) body .type-card{background:var(--cds-layer-2)!important;border:1px solid transparent!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .type-card:hover{background:var(--cds-layer-hover)!important;border-color:var(--cds-interactive)!important}
+html:not(#cds):not(#cds-x) body .type-card small{color:var(--cds-text-2)!important}
+html:not(#cds):not(#cds-x) body .conflict-list{background:var(--cds-warning-bg)!important;color:var(--cds-text)!important;border:0!important;border-left:3px solid var(--cds-warning)!important}
+html:not(#cds):not(#cds-x) body .course-color-option{background:var(--cds-layer-2)!important;color:var(--cds-text)!important;border:1px solid transparent!important}
+html:not(#cds):not(#cds-x) body .course-color-option.active{border:2px solid var(--cds-interactive)!important;background:var(--cds-layer)!important}
+html:not(#cds):not(#cds-x) body .import-drop{background:var(--cds-layer-2)!important;border:1px dashed var(--cds-border-strong)!important;color:var(--cds-text-2)!important}
+html:not(#cds):not(#cds-x) body .import-kpi{background:var(--cds-layer-2)!important;border:0!important}
+
+/* ---------- 15. 選單、搜尋結果、提示框、通知 ---------- */
+html:not(#cds):not(#cds-x) body :is(.context,.search-results,.search-modal-results){background:var(--cds-layer)!important;border:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .context button{background:transparent!important;color:var(--cds-text)!important;border-bottom:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .context button:hover,html:not(#cds):not(#cds-x) body .search-item:hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body .context .danger{color:var(--cds-error)!important}
+html:not(#cds):not(#cds-x) body .context .danger:hover{background:var(--cds-error)!important;color:#fff!important}
+html:not(#cds):not(#cds-x) body .search-item{border-color:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .search-item small{color:var(--cds-text-2)!important}
+/* 滑過課程卡的詳細資訊 → Carbon Tooltip（反白底） */
+html:not(#cds):not(#cds-x) body .course-detail-tooltip{background:var(--cds-inverse)!important;color:var(--cds-inverse-text)!important;border:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .course-detail-tooltip *{color:inherit!important}
+html:not(#cds):not(#cds-x) body .course-detail-tooltip .tip-label{opacity:.7}
+/* Toast → Carbon Inline Notification（深底＋左側色條） */
+html:not(#cds):not(#cds-x) body .toast{background:var(--cds-info-bg)!important;color:var(--cds-text)!important;border:1px solid var(--cds-border-subtle)!important;border-left:3px solid var(--cds-interactive)!important;padding:14px 16px!important}
+
+/* ---------- 16. 管理端側欄工具 ---------- */
+html:not(#cds):not(#cds-x) body :is(.display-setting-entry,.sidebar-tool-row,.cleaning-export-panel){background:transparent!important;border:0!important;border-top:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body :is(.display-setting-entry,.sidebar-tool-row):hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body :is(.display-tool-icon,.cleaning-tool-icon,.sidebar-tool-icon,.display-setting-entry-icon,.cleaning-export-icon){background:var(--cds-layer-2)!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body :is(.display-setting-entry-count,.sidebar-tool-badge){background:var(--cds-layer-selected)!important;color:var(--cds-text)!important;border:0!important}
+html:not(#cds):not(#cds-x) body :is(.room-check-item,.display-room-option){border-color:var(--cds-border-subtle)!important;background:transparent!important}
+html:not(#cds):not(#cds-x) body :is(.room-check-item,.display-room-option):hover{background:var(--cds-layer-hover)!important}
+html:not(#cds):not(#cds-x) body input[type=checkbox],html:not(#cds):not(#cds-x) body input[type=radio]{accent-color:var(--cds-interactive)}
+/* 對話框關閉鈕（icon-btn）：透明底＋統一線色 */
+html:not(#cds):not(#cds-x) body .icon-btn{background:transparent!important;color:var(--cds-text)!important;border:1px solid var(--cds-border-subtle)!important;display:inline-grid;place-items:center}
+html:not(#cds):not(#cds-x) body .icon-btn:hover{background:var(--cds-layer-hover)!important}
+/* 對話框底部按鈕列：上方一條統一線色，次要按鈕右側分隔 */
+
+/* ---------- 17. 手機版 ---------- */
+html:not(#cds):not(#cds-x) body .mobile-main{background:var(--cds-background)!important}
+html:not(#cds):not(#cds-x) body :is(.agenda-card,.stat-card,.mobile-month-card){border-top:0!important;border-right:0!important;border-bottom:0!important}
+html:not(#cds):not(#cds-x) body .stat-card{background:var(--cds-layer)!important;border-left:0!important}
+html:not(#cds):not(#cds-x) body :is(.agenda-time-label){color:var(--cds-text-2)!important;font-weight:600!important}
+html:not(#cds):not(#cds-x) body .mobile-month-day{border-color:var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .mobile-detail-sheet{background:var(--cds-layer)!important;color:var(--cds-text)!important;border-top:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .mobile-detail-backdrop{background:var(--cds-overlay)!important}
+html:not(#cds):not(#cds-x) body .mobile-detail-row{border-color:var(--cds-border-subtle)!important}
+
+/* ---------- 17-1 Lucide 圖示 ---------- */
+/* 所有圖示改為 Lucide 線條圖示，統一 16px、跟隨文字顏色 */
+html:not(#cds):not(#cds-x) body .lucide{width:16px;height:16px;flex:none;vertical-align:-3px}
+html:not(#cds):not(#cds-x) body :is(.panel-title,.modal h2) .lucide{width:18px;height:18px;margin-right:6px;vertical-align:-3px}
+html:not(#cds):not(#cds-x) body .type-card .icon .lucide{width:28px;height:28px;color:var(--cds-interactive)}
+html:not(#cds):not(#cds-x) body .repeat-dot .lucide{width:12px;height:12px}
+html:not(#cds):not(#cds-x) body .agenda-card-meta .lucide{width:13px;height:13px;vertical-align:-2px;margin-right:2px;color:var(--cds-text-2)}
+html:not(#cds):not(#cds-x) body :is(.context button,.btn,.icon-btn) .lucide{margin-right:4px}
+html:not(#cds):not(#cds-x) body :is(.icon-btn,.theme-toggle-btn,.mobile-theme-btn,.top-icon-btn) .lucide{margin:0}
+/* 被隱藏的「當日概況」面板（保留 HTML 讓統計程式不出錯，只是不顯示） */
+html:not(#cds):not(#cds-x) body [hidden]{display:none!important}
+
+/* ---------- 18. 捲軸（細、直角） ---------- */
+html:not(#cds):not(#cds-x) body ::-webkit-scrollbar{width:8px;height:8px}
+html:not(#cds):not(#cds-x) body ::-webkit-scrollbar-thumb{background:var(--cds-border-strong)!important}
+html:not(#cds):not(#cds-x) body ::-webkit-scrollbar-track{background:transparent!important}
+
+/* =====================================================================
+   19-20 配色：與「鑰匙、設備與庫存管理後台」V2.5.6 相同
+     頂欄       深藍 #1e3a8a（--navy），滑過 #172b66、按下 #0f1d45
+     側欄       白底 #ffffff；滑過 #e8e8e8；選取底 #e0e0e0＋左側 3px 深藍線
+     數字徽章   琥珀橘 #d97706（--amber）
+     其餘中性色 Carbon Gray 10（#f4f4f4 頁面、#e0e0e0 分隔線、#161616 主要文字）
+   ===================================================================== */
+/* =====================================================================
+   19. 版面
+   ‧ 左側：白色側欄（常用工具、小月曆、色標），右側：課表
+   ‧ 收合側欄時（.layout.sidebar-collapsed）沿用原本的收合規則，這裡不強制欄寬
+   ===================================================================== */
+html:not(#cds):not(#cds-x) body .layout:not(.sidebar-collapsed){grid-template-columns:232px minmax(0,1fr)!important}
+html:not(#cds):not(#cds-x) body .layout{gap:0!important;padding:0!important}
+html:not(#cds):not(#cds-x) body .main{padding:12px 24px 16px!important;gap:12px!important}
+/* 手機版維持原本的貼邊排版 */
+html:not(#cds):not(#cds-x) body .main.mobile-main{padding:0!important;gap:10px!important}
+
+/* ---- 19-1 白色側欄（Carbon Side Nav，V2.5.6 配色） ---- */
+html:not(#cds):not(#cds-x) body .sidebar{background:var(--cds-layer)!important;color:var(--cds-text)!important;border-right:1px solid var(--cds-border-subtle)!important;padding:16px 0!important;display:flex;flex-direction:column}
+html:not(#cds):not(#cds-x) body .sidebar .panel,html:not(#cds):not(#cds-x) body .sidebar .side-panel{background:transparent!important;border:0!important;padding:8px 16px!important}
+html:not(#cds):not(#cds-x) body .sidebar .panel-title{color:var(--cds-text-3)!important;font-size:12px!important;font-weight:400!important;letter-spacing:.32px;margin-bottom:8px!important}
+/* 收合鈕放在側欄最底部 */
+html:not(#cds):not(#cds-x) body .sidebar .sidebar-toolbar{order:99;margin-top:auto!important;padding:16px 16px 0!important;display:flex;justify-content:flex-start}
+html:not(#cds):not(#cds-x) body .sidebar .sidebar-collapse-btn{background:transparent!important;color:var(--cds-text-2)!important;border:1px solid var(--cds-border-subtle)!important;height:28px!important;font-size:12px!important}
+html:not(#cds):not(#cds-x) body .sidebar .sidebar-collapse-btn:hover{background:var(--cds-layer-hover)!important;color:var(--cds-text)!important}
+/* 小月曆：選取日深藍底、今天深藍字加小點 */
+html:not(#cds):not(#cds-x) body .sidebar .cal-week{color:var(--cds-text-3)!important;font-size:11px!important}
+html:not(#cds):not(#cds-x) body .sidebar .cal-day{padding:6px 0!important;font-size:12px}
+/* 常用工具：直式選單 */
+html:not(#cds):not(#cds-x) body .cds-nav-label{margin:0 0 8px;font-size:12px;color:var(--cds-text-3);letter-spacing:.32px}
+html:not(#cds):not(#cds-x) body .sidebar .quick-grid{grid-template-columns:1fr!important;gap:0!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-item{display:flex!important;flex-direction:row!important;justify-content:flex-start!important;align-items:center;gap:12px;text-align:left!important;color:var(--cds-text-2)!important;font-size:14px!important;height:40px;padding:0;position:relative;cursor:pointer;border-left:3px solid transparent}
+/* 滑過 #e8e8e8；選取（含鍵盤焦點）#e0e0e0＋深藍左線，同 V2.5.6 側欄 */
+html:not(#cds):not(#cds-x) body .sidebar .quick-item:hover{background:var(--cds-layer-hover)!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-item:is(:active,:focus-within){background:var(--cds-layer-selected)!important;border-left-color:var(--cds-interactive)!important;color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-item .quick-label br{display:none}
+html:not(#cds):not(#cds-x) body .sidebar .quick-item .quick-label{line-height:1;white-space:nowrap;margin:0!important;padding:0!important;flex:1 1 auto!important;display:flex!important;align-items:center!important;height:36px!important;min-height:0!important;max-width:none!important;text-align:left!important;font-size:14px!important;color:inherit!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-btn{display:grid!important;place-items:center;flex:none;width:36px!important;height:36px!important;margin:0!important;background:transparent!important;color:inherit!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-btn:focus-visible{outline:0!important}
+/* 讓整列都能點：按鈕的可點範圍延伸到整列 */
+html:not(#cds):not(#cds-x) body .sidebar .quick-btn::after{content:"";position:absolute;inset:0}
+/* 第一個（新增課程）：主要按鈕，深藍底白字 */
+html:not(#cds):not(#cds-x) body .sidebar .quick-item:first-child{background:var(--cds-interactive)!important;color:#fff!important;margin-bottom:8px;border-left:0!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-item:first-child:hover{background:var(--cds-interactive-hover)!important}
+html:not(#cds):not(#cds-x) body .sidebar .quick-item:first-child:active{background:var(--cds-interactive-active)!important}
+/* 數字徽章（顯示看板設定：全部／N 間）：琥珀橘，同 V2.5.6 側欄數字徽章 */
+html:not(#cds):not(#cds-x) body .sidebar .quick-item .sidebar-tool-badge{position:absolute!important;right:12px!important;left:auto!important;top:50%!important;transform:translateY(-50%)!important;margin:0!important;flex:none;height:20px!important;padding:0 6px!important;display:inline-flex!important;align-items:center;font-size:11px!important;background:var(--cds-amber,#d97706)!important;color:#fff!important;border:0!important}
+/* 色標 */
+html:not(#cds):not(#cds-x) body .sidebar .side-legend{color:var(--cds-text-2)!important}
+
+/* ---- 19-2 右側工具列：白色長條 ---- */
+html:not(#cds):not(#cds-x) body .control-bar{background:var(--cds-layer)!important;border:1px solid var(--cds-border-subtle)!important;padding:8px 12px!important;min-height:56px!important}
+html:not(#cds):not(#cds-x) body .control-bar .title-group h1{font-size:16px!important;font-weight:600!important}
+html:not(#cds):not(#cds-x) body .control-bar :is(.btn,.segmented,select,input[type=date]){height:32px!important}
+
+/* ---- 19-3 課表區：白底細框，表頭兩行（教室名＋容量） ---- */
+html:not(#cds):not(#cds-x) body .schedule-panel{border:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .schedule thead th{background:var(--cds-layer-selected)!important;border-bottom:1px solid var(--cds-border-subtle)!important} /* 表頭底色 #e0e0e0，同 V2.5.6 */
+html:not(#cds):not(#cds-x) body .schedule tbody th{background:var(--cds-layer)!important}
+html:not(#cds):not(#cds-x) body #dayView .schedule tbody tr:nth-child(even) :is(td,th){background:var(--cds-layer-2)!important}
+
+/* ---- 19-4 課程卡：類別色改為 Carbon 色票（淺色底＋左側 3px 深色條） ----
+   課程卡底色由 JS 以 style.background 寫入，瀏覽器會存成 rgb() 格式，
+   因此用 [style*="rgb(…)"] 對應四個預設色標；自訂顏色則保留原色。 */
+html:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card){--cds-card-bg:var(--cds-layer-2);--cds-card-bar:#94a3b8}
+html:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(159, 208, 168)"],[style*="#9fd0a8" i],[style*="#9fd0a8" i]){--cds-card-bg:#defbe6;--cds-card-bar:#198038}
+html:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(141, 189, 242)"],[style*="#8dbdf2" i],[style*="#8dbdf2" i]){--cds-card-bg:#edf5ff;--cds-card-bar:#0f62fe}
+html:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(240, 193, 127)"],[style*="#f0c17f" i],[style*="#f0c17f" i]){--cds-card-bg:#fff2e8;--cds-card-bar:#eb6200}
+html:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(197, 171, 231)"],[style*="#c5abe7" i],[style*="#c5abe7" i]){--cds-card-bg:#f6f2ff;--cds-card-bar:#8a3ffc}
+html:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(159, 208, 168)"],[style*="#9fd0a8" i],[style*="rgb(141, 189, 242)"],[style*="#8dbdf2" i],[style*="rgb(240, 193, 127)"],[style*="#f0c17f" i],[style*="rgb(197, 171, 231)"],[style*="#c5abe7" i]){background:var(--cds-card-bg)!important;color:var(--cds-text)!important;border-left:3px solid var(--cds-card-bar)!important}
+html:not(#cds):not(#cds-x) body .course-card{border-top:1px solid var(--cds-border-subtle)!important;border-right:1px solid var(--cds-border-subtle)!important;border-bottom:1px solid var(--cds-border-subtle)!important}
+html:not(#cds):not(#cds-x) body .course-card .course-title{color:var(--cds-text)!important}
+html:not(#cds):not(#cds-x) body .course-card .course-meta{color:var(--cds-text-2)!important;opacity:1!important}
+html:not(#cds):not(#cds-x) body .course-card .repeat-dot{color:var(--cds-text-2)!important}
+/* 深色主題：底色改用 Carbon 90 階，色條用 40 階 */
+html[data-theme="dark"]:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(159, 208, 168)"],[style*="#9fd0a8" i],[style*="#9fd0a8" i]){--cds-card-bg:#022d0d;--cds-card-bar:#42be65}
+html[data-theme="dark"]:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(141, 189, 242)"],[style*="#8dbdf2" i],[style*="#8dbdf2" i]){--cds-card-bg:#134e4a;--cds-card-bar:#4589ff}
+html[data-theme="dark"]:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(240, 193, 127)"],[style*="#f0c17f" i],[style*="#f0c17f" i]){--cds-card-bg:#3e1a00;--cds-card-bar:#ff832b}
+html[data-theme="dark"]:not(#cds):not(#cds-x) body :is(.course-card,.mini-course,.agenda-card,.mobile-month-card):is([style*="rgb(197, 171, 231)"],[style*="#c5abe7" i],[style*="#c5abe7" i]){--cds-card-bg:#31135e;--cds-card-bar:#a56eff}
+/* 手機議程卡原本自帶左側色條（::before），改由上面的 border-left 呈現，避免出現兩條 */
+html:not(#cds):not(#cds-x) body .agenda-card::before{display:none!important}
+/* 色標圓點、色票按鈕同步換成 Carbon 60 階 */
+html:not(#cds):not(#cds-x) body :is(.dot,.color-swatch,.mobile-legend *)[style*="#9fd0a8" i]{background:#198038!important}
+html:not(#cds):not(#cds-x) body :is(.dot,.color-swatch,.mobile-legend *)[style*="#8dbdf2" i]{background:#0f62fe!important}
+html:not(#cds):not(#cds-x) body :is(.dot,.color-swatch,.mobile-legend *)[style*="#f0c17f" i]{background:#eb6200!important}
+html:not(#cds):not(#cds-x) body :is(.dot,.color-swatch,.mobile-legend *)[style*="#c5abe7" i]{background:#8a3ffc!important}
+
+
+/* =====================================================================
+   20. 頂部導覽列（只有 Index、Admin 有；Mobile 的頂列也套同一組顏色）
+   ‧ 深藍 #1e3a8a 底，同 V2.5.6 頂欄；原本的工具列整排放在這裡，高 56px
+   ‧ 導覽列內部改寫代幣，按鈕、下拉選單、日期欄自動變成深藍底白字版
+   ‧ 內部線條統一用 #4c63a4（深藍上疊 24% 白），維持「線條同一個顏色」
+   ===================================================================== */
+html:not(#cds):not(#cds-x) body :is(.cds-header,.mobile-topbar){
+  --cds-background:#1e3a8a;--cds-layer:#1e3a8a;--cds-layer-2:#172b66;--cds-layer-hover:#172b66;--cds-layer-selected:#0f1d45;
+  --cds-field:#172b66;--cds-field-2:#172b66;--cds-border-subtle:#4c63a4;--cds-border-strong:#4c63a4;
+  --cds-text:#ffffff;--cds-text-2:#dbe4fb;--cds-text-3:#b4c3ec;--cds-placeholder:#b4c3ec;--cds-focus:#ffffff;
+  --cds-info-bg:#172b66;--cds-info-text:#ffffff;--cds-highlight:#172b66;
+  background:#1e3a8a!important;color:#fff!important;border-bottom:1px solid #172b66!important;color-scheme:dark}
+html:not(#cds):not(#cds-x) body .cds-header{display:flex;align-items:stretch;position:relative;z-index:50}
+/* 名稱區：寬度 = 側欄寬 232px，左內距 16px 與側欄內容同一條線 */
+html:not(#cds):not(#cds-x) body .cds-header-name{flex:0 0 232px;width:232px;display:flex;align-items:center;padding:0 16px;font-size:14px;color:#dbe4fb;white-space:nowrap;letter-spacing:.1px}
+html:not(#cds):not(#cds-x) body .cds-header-name b{color:#fff;font-weight:600;margin-left:6px}
+/* 工具列：左右內距 24px，與下方課表區（.main 左右內距 24px）的邊緣對齊 */
+html:not(#cds):not(#cds-x) body .cds-header .control-bar{flex:1 1 auto;min-width:0;background:transparent!important;border:0!important;margin:0!important;padding:0 24px!important;height:56px!important;min-height:56px!important}
+/* 側欄收合時，名稱區一起隱藏，工具列就和全寬的課表區對齊 */
+html:not(#cds):not(#cds-x) body .cds-header:has(+ .layout.sidebar-collapsed) .cds-header-name{display:none}
+html:not(#cds):not(#cds-x) body .cds-header .control-bar .title-group h1{color:#fff!important}
+html:not(#cds):not(#cds-x) body .cds-header #roomFilterCount{color:#dbe4fb!important}
+html:not(#cds):not(#cds-x) body .cds-header .control-divider{background:#4c63a4!important}
+/* 深藍底上的「選取」與「主要按鈕」改成白底深藍字，才看得出來 */
+html:not(#cds):not(#cds-x) body :is(.cds-header,.mobile-topbar) :is(.segmented,.theme-switch,.vacancy-mode-tabs,.mobile-segmented,.mobile-week-tabs) button.active{background:#fff!important;color:#1e3a8a!important}
+html:not(#cds):not(#cds-x) body :is(.cds-header,.mobile-topbar) :is(.btn-primary,.btn.primary){background:#fff!important;color:#1e3a8a!important;border-color:#fff!important}
+html:not(#cds):not(#cds-x) body :is(.cds-header,.mobile-topbar) :is(.btn-primary,.btn.primary):hover{background:#e8eefc!important}
+/* 手機頂列：摘要文字與色標原本寫死深灰，深藍底上改淺色 */
+html:not(#cds):not(#cds-x) body .mobile-topbar :is(.mobile-summary-row,.mobile-summary-row span,.mobile-legend,.mobile-legend span){color:#dbe4fb!important}
+/* 收合側欄後，展開鈕會被程式移進工具列 */
+html:not(#cds):not(#cds-x) body .cds-header .sidebar-collapse-btn{background:transparent!important;color:#fff!important;border:1px solid #4c63a4!important;height:32px!important;width:auto!important;min-width:64px!important;padding:0 10px!important;white-space:nowrap!important;writing-mode:horizontal-tb!important;flex:none!important;position:static!important;transform:none!important;margin:0 8px 0 0!important}
+html:not(#cds):not(#cds-x) body .cds-header .sidebar-collapse-btn:hover{background:#172b66!important}
+html:not(#cds):not(#cds-x) body .cds-header + .layout{height:calc(100% - 57px)!important}
+html:not(#cds):not(#cds-x) body .cds-header + .layout .main{padding-top:16px!important}
+/* 深色模式：側欄跟著變深，選取線改淺藍才看得到；頂欄維持深藍 */
+html[data-theme="dark"]:not(#cds):not(#cds-x) body .sidebar .quick-item:is(:active,:focus-within){border-left-color:#a9bdf2!important}
+
+/* =====================================================================
+   22. 新增／修改課程改為右側抽屜（Carbon Side Panel）
+   ‧ 套用對象：#typeModal（選擇排課類型）、#courseModal（課程表單）
+   ‧ 只改 CSS：開關仍由原本的 style.display='flex' / closeModal() 控制，程式不變
+   ‧ 結構：標題固定在上 → 內容區可捲動 → 按鈕列固定在底部
+   ‧ 衝突提醒、自訂色彩等對話框在 HTML 中位於後面，會正常疊在抽屜上方
+   ===================================================================== */
+html:not(#cds):not(#cds-x) body :is(#typeModal,#courseModal){justify-content:flex-end!important;align-items:stretch!important;padding:0!important}
+html:not(#cds):not(#cds-x) body :is(#typeModal,#courseModal) > .modal{
+  width:min(480px,100vw)!important;height:100%!important;max-height:none!important;margin:0!important;
+  display:flex!important;flex-direction:column;padding:0!important;overflow:hidden!important;
+  border-left:1px solid var(--cds-border-subtle)!important;
+  animation:cds-drawer-in .24s cubic-bezier(0,0,.38,.9)}
+/* 抽屜由右側滑入（Carbon 的 entrance 曲線） */
+@keyframes cds-drawer-in{from{transform:translateX(100%)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){ html:not(#cds):not(#cds-x) body :is(#typeModal,#courseModal) > .modal{animation:none} }
+/* 標題列：固定在上方，底部一條分隔線 */
+html:not(#cds):not(#cds-x) body :is(#typeModal,#courseModal) > .modal > h2{flex:none;margin:0!important;padding:16px 16px 14px!important;border-bottom:1px solid var(--cds-border-subtle)!important;font-size:20px!important}
+/* 內容區：佔滿中間、可捲動 */
+html:not(#cds):not(#cds-x) body :is(#typeModal .type-grid,#courseModal .form-grid){flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px!important;margin:0!important;align-content:start}
+/* 按鈕列：固定在底部，滿版 */
+/* 選擇排課類型：抽屜較窄，三張卡改成直排，圖示在左 */
+html:not(#cds):not(#cds-x) body #typeModal .type-grid{display:grid!important;grid-template-columns:1fr!important;gap:8px!important}
+html:not(#cds):not(#cds-x) body #typeModal .type-card{display:grid!important;grid-template-columns:44px 1fr;grid-template-rows:auto auto;column-gap:12px;align-items:center;text-align:left!important;padding:16px!important;cursor:pointer}
+html:not(#cds):not(#cds-x) body #typeModal .type-card .icon{grid-row:1 / 3;margin:0!important;display:grid;place-items:center}
+html:not(#cds):not(#cds-x) body #typeModal .type-card strong{font-size:16px;font-weight:600}
+html:not(#cds):not(#cds-x) body #typeModal .type-card small{margin:2px 0 0!important}
+/* 課程表單：兩欄等寬，欄位不撐破抽屜寬度 */
+html:not(#cds):not(#cds-x) body #courseModal .form-grid{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:16px!important;overflow-x:hidden;box-sizing:border-box;width:100%!important}
+html:not(#cds):not(#cds-x) body #courseModal .form-grid .field{min-width:0!important}
+html:not(#cds):not(#cds-x) body #courseModal .form-grid .field.full,html:not(#cds):not(#cds-x) body #courseModal .form-grid .course-color-field{grid-column:1 / -1!important}
+html:not(#cds):not(#cds-x) body #courseModal .form-grid :is(input,select,textarea){width:100%!important;min-width:0!important;box-sizing:border-box!important}
+/* 色標選項：兩欄排列，自訂色彩自動換行 */
+html:not(#cds):not(#cds-x) body #courseModal .course-color-presets{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+html:not(#cds):not(#cds-x) body #courseModal .course-color-option{width:100%!important;justify-content:flex-start!important}
+/* 手機寬度：抽屜佔滿整個畫面 */
+@media (max-width:520px){ html:not(#cds):not(#cds-x) body :is(#typeModal,#courseModal) > .modal{width:100vw!important;border-left:0!important} }
+
+/* =====================================================================
+   23. 拖曳空白時段新增排程（搭配 Admin.html 的拖曳程式）
+   ‧ 選取中的格子：淡藍底（--navy-soft）＋左側深藍線，第一格顯示時間
+   ‧ 抽屜上方的「已選取時段」摘要
+   ===================================================================== */
+html:not(#cds):not(#cds-x) body.cds-dragging{user-select:none!important;-webkit-user-select:none!important;cursor:ns-resize!important}
+html:not(#cds):not(#cds-x) body #timetable td.drop-target{cursor:cell}
+html:not(#cds):not(#cds-x) body #timetable td.cds-drag-sel{background:var(--cds-highlight)!important;box-shadow:inset 3px 0 0 var(--cds-interactive)!important;position:relative}
+html:not(#cds):not(#cds-x) body #timetable td.cds-drag-first{box-shadow:inset 3px 0 0 var(--cds-interactive),inset 0 1px 0 var(--cds-interactive)!important}
+html:not(#cds):not(#cds-x) body #timetable td.cds-drag-last{box-shadow:inset 3px 0 0 var(--cds-interactive),inset 0 -1px 0 var(--cds-interactive)!important}
+html:not(#cds):not(#cds-x) body #timetable td.cds-drag-first.cds-drag-last{box-shadow:inset 3px 0 0 var(--cds-interactive),inset 0 1px 0 var(--cds-interactive),inset 0 -1px 0 var(--cds-interactive)!important}
+/* 第一格顯示「10:00–12:00」 */
+html:not(#cds):not(#cds-x) body #timetable td.cds-drag-first::after{content:attr(data-cds-label);position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--cds-interactive);white-space:nowrap;pointer-events:none}
+/* 抽屜上方的選取摘要 */
+html:not(#cds):not(#cds-x) body .cds-drag-summary{flex:none;margin:0;padding:12px 16px;background:var(--cds-highlight);border-bottom:1px solid var(--cds-border-subtle);border-left:3px solid var(--cds-interactive)}
+html:not(#cds):not(#cds-x) body .cds-drag-summary[hidden]{display:none!important}
+html:not(#cds):not(#cds-x) body .cds-drag-summary-label{font-size:12px;color:var(--cds-text-2);margin-bottom:4px}
+html:not(#cds):not(#cds-x) body .cds-drag-summary-main{font-size:16px;font-weight:600;color:var(--cds-text);display:flex;align-items:center;gap:6px}
+html:not(#cds):not(#cds-x) body .cds-drag-summary-sub{font-size:13px;color:var(--cds-text-2);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+html:not(#cds):not(#cds-x) body .cds-drag-summary .lucide{width:14px;height:14px;color:var(--cds-interactive)}
+
+/* =====================================================================
+   24. 日課表尺寸一致
+   ‧ 原本每間教室固定 150px：教室少時表格只佔一小塊，依容量篩選後大小忽大忽小
+   ‧ 改為「至少 150px、可以變寬」，表格永遠填滿課表區；教室多時仍可左右捲動
+   ‧ 時間欄維持 92px
+   ‧ 每一列（含最後的結束時間列）高度完全相同
+   ===================================================================== */
+html:not(#cds):not(#cds-x) body #dayView .schedule{width:auto!important;min-width:100%!important;table-layout:auto!important}
+html:not(#cds):not(#cds-x) body #dayView .schedule thead th:not(:first-child),html:not(#cds):not(#cds-x) body #dayView .schedule td{width:auto!important;min-width:150px!important;max-width:none!important}
+/* 每一列（含最後的 22:00 列）都等於程式算出的 --slot-row-h，
+   表格高度不再撐滿整塊（撐滿時瀏覽器會把多出的幾 px 不平均地分給各列） */
+html:not(#cds):not(#cds-x) body #dayView .schedule{height:auto!important;border-top:1px solid var(--cds-border-subtle)!important;border-left:1px solid var(--cds-border-subtle)!important}
+/* 外框改畫在表格本身：列高取整數後剩下的幾 px 落在框外，呈現頁面底色，不會像多出半格 */
+html:not(#cds):not(#cds-x) body #dayView{border:0!important;background:transparent!important}
+html:not(#cds):not(#cds-x) body #dayView .schedule tbody tr,html:not(#cds):not(#cds-x) body #dayView .schedule tbody tr > *{height:var(--slot-row-h)!important;max-height:var(--slot-row-h)!important;box-sizing:border-box!important}
+
+/* =====================================================================
+   25. 頂部工具列在筆電寬度不被截斷
+   ‧ 1440px 以下：隱藏日期旁的「今天」小標籤（左邊已有「今天」按鈕），日期字縮小
+   ‧ 1300px 以下：日期標題整個隱藏（日期欄位仍顯示日期），把空間留給篩選與按鈕
+   ===================================================================== */
+@media (max-width:1439px){
+  html:not(#cds):not(#cds-x) body .cds-header .title-group .today-tag{display:none!important}
+  html:not(#cds):not(#cds-x) body .cds-header .control-bar .title-group h1{font-size:14px!important}
+  html:not(#cds):not(#cds-x) body .cds-header .control-bar{gap:4px!important}
+}
+@media (max-width:1299px){
+  html:not(#cds):not(#cds-x) body .cds-header .title-group,html:not(#cds):not(#cds-x) body .cds-header .title-group + .control-divider{display:none!important}
+}
+
+/* ---------- 21. 手機版深色模式：議程卡副文字 ----------
+   原檔把副文字寫死成深藍灰 rgba(23,32,51,.78)，深色底上看不清楚，
+   改用 Carbon 次要文字色，淺色、深色模式都會自動切換 */
+html:not(#cds):not(#cds-x) body .agenda-card-meta,html:not(#cds):not(#cds-x) body .agenda-card-meta span{color:var(--cds-text-2)!important}
+html:not(#cds):not(#cds-x) body .agenda-card-meta .lucide{color:var(--cds-text-2)!important;opacity:.85}
+html:not(#cds):not(#cds-x) body .agenda-card-title{color:var(--cds-text)!important}
+
+/* ===================== Carbon 主題層結束 ===================== */
+
+</style>
+<script>
+/* ===== Lucide 圖示庫（https://lucide.dev，ISC 授權）=====
+ * 程式中以 LUCIDE.sun、LUCIDE['circle-check'] 這種寫法取得 SVG 字串，
+ * 搭配 innerHTML 使用。要新增圖示：到 lucide.dev 複製 SVG 內容，照格式加一行即可。 */
+/* 圖示庫 */
+window.LUCIDE = {
+  'arrow-down': '<svg class="lucide lucide-arrow-down" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>',
+  'arrow-up': '<svg class="lucide lucide-arrow-up" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>',
+  'bookmark': '<svg class="lucide lucide-bookmark" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></svg>',
+  'calendar': '<svg class="lucide lucide-calendar" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>',
+  'circle-alert': '<svg class="lucide lucide-circle-alert" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>',
+  'circle-check': '<svg class="lucide lucide-circle-check" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m16 9-5.5 5.5L8 12"/></svg>',
+  'clock': '<svg class="lucide lucide-clock" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+  'loader-circle': '<svg class="lucide lucide-loader-circle" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>',
+  'map-pin': '<svg class="lucide lucide-map-pin" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>',
+  'moon': '<svg class="lucide lucide-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>',
+  'repeat': '<svg class="lucide lucide-repeat" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+  'school': '<svg class="lucide lucide-school" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 21v-3a2 2 0 0 0-4 0v3"/><path d="M18 4.933V21"/><path d="m4 6 7.106-3.79a2 2 0 0 1 1.788 0L20 6"/><path d="m6 11-3.52 2.147a1 1 0 0 0-.48.854V19a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5a1 1 0 0 0-.48-.853L18 11"/><path d="M6 4.933V21"/><circle cx="12" cy="9" r="2"/></svg>',
+  'sun': '<svg class="lucide lucide-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>',
+  'tag': '<svg class="lucide lucide-tag" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>',
+  'user': '<svg class="lucide lucide-user" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+};
+</script>
+<script>
+/* =====================================================================
+   自訂色彩課程卡：左側邊條自動改成「同色系的深色」
+   ---------------------------------------------------------------------
+   原因：課程卡底色是程式寫在 style 上的，CSS 讀不到這個顏色，
+        所以自訂色彩的卡片原本只能用固定的中性灰邊條。
+   做法：
+     1. 監看頁面，有課程卡出現或重新繪製時，讀取它的底色
+     2. 換算成 HSL，保留色相、拉高飽和度、把亮度壓到約一半，得到同色系深色
+     3. 寫進卡片的 CSS 變數 --cds-card-bar，Carbon 主題層會拿它當左側邊條顏色
+   四個預設色標（管院／院外／活動／會議）已有 Carbon 指定色，這裡會略過。
+   適用：日課表 .course-card、週月課表 .mini-course、手機 .agenda-card、.mobile-month-card
+   ===================================================================== */
+(function () {
+  'use strict';
+
+  const CARD_SELECTOR = '.course-card,.mini-course,.agenda-card,.mobile-month-card';
+  // 四個預設色標（rgb 格式），交給 CSS 處理，不覆寫
+  const PRESETS = ['rgb(159, 208, 168)', 'rgb(141, 189, 242)', 'rgb(240, 193, 127)', 'rgb(197, 171, 231)'];
+
+  /** 'rgb(234, 153, 153)' → [234,153,153]；讀不到回傳 null */
+  function parseRgb(s) {
+    const m = String(s || '').match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+  }
+
+  /** RGB → HSL（h:0-360、s/l:0-1） */
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60;
+    }
+    return [h, s, l];
+  }
+
+  /** 由底色算出同色系深色：亮度約一半（介於 22%～42%），飽和度略為提高 */
+  function deeperShade(rgb) {
+    const hsl = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+    const h = Math.round(hsl[0]);
+    // 幾乎沒有彩度的灰色維持灰色，其餘提高飽和度讓邊條更鮮明
+    const s = hsl[1] < 0.08 ? hsl[1] : Math.min(0.9, hsl[1] * 1.1 + 0.1);
+    const l = Math.max(0.22, Math.min(0.42, hsl[2] * 0.5));
+    return 'hsl(' + h + ', ' + Math.round(s * 100) + '%, ' + Math.round(l * 100) + '%)';
+  }
+
+  /** 處理單張卡片 */
+  function applyBar(card) {
+    const bg = card.style.backgroundColor; // 讀「寫在 style 上的原始底色」，不受主題層覆寫影響
+    if (!bg || PRESETS.indexOf(bg) >= 0) {
+      if (card.style.getPropertyValue('--cds-card-bar')) card.style.removeProperty('--cds-card-bar');
+      return;
+    }
+    const rgb = parseRgb(bg);
+    if (!rgb) return;
+    const bar = deeperShade(rgb);
+    if (card.style.getPropertyValue('--cds-card-bar') !== bar) card.style.setProperty('--cds-card-bar', bar);
+  }
+
+  // 課程卡常整批重畫，用 requestAnimationFrame 合併成一次處理，避免重複計算
+  let queued = false;
+  function scan() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(function () {
+      queued = false;
+      document.querySelectorAll(CARD_SELECTOR).forEach(applyBar);
+    });
+  }
+
+  new MutationObserver(scan).observe(document.documentElement, {
+    childList: true, subtree: true, attributes: true, attributeFilter: ['style']
+  });
+  document.addEventListener('DOMContentLoaded', scan);
+})();
+
+</script>
+
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+<div class="panel side-panel">
+<div id="calMonth1"></div>
+</div>
+<!-- Carbon 版：當日概況不顯示；保留元素是因為 updateStats() 仍會寫入這些 id -->
+      <div class="panel side-panel" hidden>
+<div class="panel-title">當日概況</div>
+<div class="side-stats">
+<div class="side-stat"><div><small>教室總數</small><strong id="statRooms">0 間</strong></div></div>
+<div class="side-stat"><div><small>當日課程</small><strong id="statCourses">0 筆</strong></div></div>
+<div class="side-stat"><div><small>使用中教室</small><strong id="statUsed">0 間</strong></div></div>
+<div class="side-stat"><div><small>可用教室</small><strong id="statFree">0 間</strong></div></div>
+</div>
+</div>
+<div class="panel side-panel">
+<div class="panel-title"><svg class="lucide lucide-palette" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg> 課程類別色標</div>
+<div class="side-legend">
+<span class="legend-item"><span class="dot" style="background:#9fd0a8"></span>管院課程</span>
+<span class="legend-item"><span class="dot" style="background:#8dbdf2"></span>院外課程</span>
+<span class="legend-item"><span class="dot" style="background:#f0c17f"></span>活動使用</span>
+<span class="legend-item"><span class="dot" style="background:#c5abe7"></span>會議使用</span>
+</div>
+</div>
+</aside>
+<main class="main mobile-main">
+<section class="mobile-topbar">
+<div class="mobile-date-row">
+<button class="mobile-icon-btn" onclick="shiftDay(-1)" type="button">‹</button>
+<button class="mobile-date-title" onclick="openMobileCalendar()" type="button">
+<span id="mobileDateTitle">日期</span>
+</button>
+<button class="mobile-icon-btn" onclick="shiftDay(1)" type="button">›</button>
+</div>
+<div class="mobile-view-row">
+<div class="mobile-segmented">
+<button class="active" id="viewDay" onclick="switchView('day')">日</button>
+<button id="viewWeek" onclick="switchView('week')">週</button>
+<button id="viewMonth" onclick="switchView('month')">月</button>
+</div>
+<button class="btn mobile-filter-btn" onclick="openRoomFilterModal()" type="button"><svg class="lucide lucide-list-filter" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/></svg> 教室</button>
+<select id="categorySelect" onchange="applyFilters()" title="容量分類"></select>
+<button class="mobile-theme-btn" id="mobileThemeBtn" onclick="toggleTheme()" type="button"><svg class="lucide lucide-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></button>
+</div>
+<div class="mobile-summary-row">
+<span id="mobileSummaryText">載入中…</span>
+<button class="mobile-today-btn" onclick="goToday()" type="button">今天</button>
+</div>
+<div class="mobile-legend">
+<span><i style="background:#9fd0a8"></i>管院</span>
+<span><i style="background:#8dbdf2"></i>院外</span>
+<span><i style="background:#f0c17f"></i>活動</span>
+<span><i style="background:#c5abe7"></i>會議</span>
+</div>
+</section>
+<section class="mobile-view-panel" id="mobileDayView"></section>
+<section class="mobile-view-panel hidden" id="mobileWeekView"></section>
+<section class="mobile-view-panel hidden" id="mobileMonthView"></section>
+</main>
+</div>
+
+
+
+
+
+
+
+
+
+<div class="search-results" id="searchResults"></div>
+<div class="modal-overlay" id="roomFilterModal">
+<div class="modal room-filter-modal">
+<div class="room-filter-head">
+<h2>教室篩選</h2>
+<button class="icon-btn" onclick="closeModal('roomFilterModal')" type="button"><svg class="lucide lucide-x" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+</div>
+<div class="room-filter-toolbar">
+<button class="btn" onclick="setAllRoomChecks(true)" type="button">全部勾選</button>
+<button class="btn" onclick="setAllRoomChecks(false)" type="button">全部取消</button>
+<span class="room-filter-modal-count" id="roomFilterModalCount"></span>
+</div>
+<div class="room-filter-list" id="roomFilterList"></div>
+<div class="modal-actions">
+<button class="btn" onclick="closeModal('roomFilterModal')" type="button">取消</button>
+<button class="btn btn-primary" onclick="applyRoomFilterModal()" type="button">套用</button>
+</div>
+</div>
+</div>
+<div class="course-detail-tooltip" id="courseDetailTooltip"></div>
+<div class="mobile-detail-backdrop" id="mobileDetailBackdrop" onclick="closeMobileDetail()"></div>
+<div class="mobile-detail-sheet" id="mobileDetailSheet">
+<div class="mobile-detail-handle"></div>
+<div id="mobileDetailContent"></div>
+<button class="mobile-detail-close" onclick="closeMobileDetail()" type="button">關閉</button>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const DAY_START_MIN=8*60;
+const DAY_END_MIN=22*60; // 最晚結束時間 22:00（Carbon 版由 21:00 延長）
+function minToTime_(m){return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;}
+const TIME_POINTS=[];
+for(let m=DAY_START_MIN;m<=DAY_END_MIN;m+=30) TIME_POINTS.push(minToTime_(m));
+const TIME_SLOTS=[];
+for(let m=DAY_START_MIN;m<DAY_END_MIN;m+=30) TIME_SLOTS.push({code:minToTime_(m),label:minToTime_(m)});
+let allRooms=[],filteredRooms=[],courses=[],selectedCourse=null,currentView='day',currentDate='',calendarBase=new Date(),pendingConflictResolver=null,pendingRetry=null,tempOrder=[];
+let selectedRoomNames=new Set();
+let monthCache={};
+let lastScheduleVersion='';
+let schedulePollTimer=null;
+let schedulePollBusy=false;
+
+
+function setTheme(mode){
+  const theme=mode==='dark'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',theme);
+  try{localStorage.setItem('classroomAdminTheme',theme);}catch(e){}
+  const light=document.getElementById('themeLight'),dark=document.getElementById('themeDark');
+  if(light)light.classList.toggle('active',theme==='light');
+  if(dark)dark.classList.toggle('active',theme==='dark');
+  const mobileThemeBtn=document.getElementById('mobileThemeBtn');
+  if(mobileThemeBtn)mobileThemeBtn.innerHTML=theme==='dark'?LUCIDE.moon:LUCIDE.sun; /* Lucide 圖示 */
+}
+function initTheme(){
+  let saved='light';
+  try{saved=localStorage.getItem('classroomAdminTheme')||'light';}catch(e){}
+  setTheme(saved);
+}
+
+function toggleTheme(){
+  const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+  setTheme(next);
+  updateMobileHeader_();
+}
+function shiftDay(n){onDateChange(addDays(currentDate,n));}
+
+
+window.onload=async()=>{
+  initTheme();
+  currentDate=formatDate(new Date());
+  calendarBase=parseDate(currentDate);
+  currentView='day';
+  updateMobileHeader_();
+  try{
+    await loadRooms();
+  }catch(e){
+    console.error(e);
+    const el=document.getElementById('mobileDayView');
+    if(el)el.innerHTML='<div class="agenda-empty">課表載入失敗，請重新整理頁面</div>';
+  }
+};
+function server(fn,args=[]){return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args));}
+function startSchedulePolling_(){
+  if(schedulePollTimer)clearInterval(schedulePollTimer);
+  schedulePollTimer=setInterval(checkScheduleVersion_,5000);
+}
+async function checkScheduleVersion_(){
+  if(schedulePollBusy||document.hidden)return;
+  schedulePollBusy=true;
+  try{
+    const version=String(await server('getScheduleVersion')||'');
+    if(!lastScheduleVersion){lastScheduleVersion=version;return;}
+    if(version&&version!==lastScheduleVersion){
+      await refreshMobileVisibleSchedule_();
+      lastScheduleVersion=version;
+    }
+  }catch(e){console.warn('Mobile 自動同步檢查失敗',e);}
+  finally{schedulePollBusy=false;}
+}
+function clearMonthCacheForRange_(start,end){
+  let d=parseDate(start),e=parseDate(end);
+  d=new Date(d.getFullYear(),d.getMonth(),1);
+  while(d<=e){
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    delete monthCache[key];
+    if(typeof monthInflight!=='undefined')delete monthInflight[key];
+    d=new Date(d.getFullYear(),d.getMonth()+1,1);
+  }
+}
+async function refreshMobileVisibleSchedule_(){
+  if(currentView==='day'){
+    const key=monthKey_(currentDate);
+    delete monthCache[key];
+    if(typeof monthInflight!=='undefined')delete monthInflight[key];
+    await loadDay(true);
+    return;
+  }
+  if(currentView==='week'){
+    const d=parseDate(currentDate),dow=d.getDay();
+    const start=addDays(currentDate,-dow),end=addDays(start,6);
+    clearMonthCacheForRange_(start,end);
+    await renderMobileWeek_();
+    return;
+  }
+  const key=monthKey_(currentDate);
+  delete monthCache[key];
+  if(typeof monthInflight!=='undefined')delete monthInflight[key];
+  await renderMobileMonth_();
+}
+
+
+let mobileWeekSelectedDate='';
+function mobileDateTitleText_(d){
+  const dt=parseDate(d),w=['日','一','二','三','四','五','六'][dt.getDay()];
+  return `${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日（${w}）`;
+}
+function updateMobileHeader_(){
+  const el=document.getElementById('mobileDateTitle');
+  if(el)el.textContent=mobileDateTitleText_(currentDate);
+  const themeBtn=document.getElementById('mobileThemeBtn');
+  if(themeBtn)themeBtn.innerHTML=document.documentElement.dataset.theme==='dark'?LUCIDE.moon:LUCIDE.sun; /* Lucide 圖示 */
+}
+function mobileFilteredCourses_(list){
+  const roomSet=new Set(filteredRooms.map(r=>r.name));
+  return (list||[]).filter(c=>roomSet.has(c.classroom));
+}
+function renderMobileSummary_(list){
+  const el=document.getElementById('mobileSummaryText');if(!el)return;
+  const count=(list||[]).length;
+  const rooms=new Set((list||[]).map(c=>c.classroom)).size;
+  el.textContent=`今日 ${count} 筆 · 使用 ${rooms} 間教室`;
+}
+function agendaCardHtml_(c){
+  const bg=c.color||'#9fd0a8';
+  const fg=textColor(bg);
+  const meta=[
+    c.classroom?`${LUCIDE.school}${esc(c.classroom)}`:'',
+    c.department?`${LUCIDE.tag}${esc(c.department)}`:'',
+    (c.startTime||c.endTime)?`${LUCIDE.clock}${esc(c.startTime||'')}–${esc(c.endTime||'')}`:'',
+    c.person?`${LUCIDE.user}${esc(c.person)}`:'',
+    c.useType?`${LUCIDE.bookmark}${esc(c.useType)}`:''
+  ].filter(Boolean);
+  return `<button class="agenda-card" style="background:${esc(bg)};color:${fg}" onclick='openMobileDetailById(${JSON.stringify(String(c.id))})'>
+    <div class="agenda-card-title">${esc(c.title||'未命名課程')}</div>
+    <div class="agenda-card-meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>
+  </button>`;
+}
+function renderAgendaInto_(target,list,dateForSummary=null){
+  const el=typeof target==='string'?document.getElementById(target):target;
+  if(!el)return;
+  const data=mobileFilteredCourses_(list).slice().sort((a,b)=>
+    (a.startTime||'').localeCompare(b.startTime||'') ||
+    (a.classroom||'').localeCompare(b.classroom||'')
+  );
+  if(dateForSummary)renderMobileSummary_(data);
+  if(!data.length){
+    el.innerHTML='<div class="agenda-empty">這一天目前沒有課程或借用紀錄</div>';
+    return;
+  }
+  const groups={};
+  data.forEach(c=>{
+    const key=c.startTime||'未設定時間';
+    (groups[key]||(groups[key]=[])).push(c);
+  });
+  el.innerHTML=Object.keys(groups).sort().map(time=>`
+    <div class="agenda-time-group">
+      <div class="agenda-time-label">${esc(time)}</div>
+      ${groups[time].map(agendaCardHtml_).join('')}
+    </div>
+  `).join('');
+}
+function renderMobileDay_(){
+  renderAgendaInto_('mobileDayView',courses,currentDate);
+}
+async function renderMobileWeek_(){
+  const d=parseDate(currentDate),dow=d.getDay();
+  const start=addDays(currentDate,-dow);
+  const end=addDays(start,6);
+  const data=await getRangeCached(start,end);window.__mobileRangeCache=data;
+  if(!mobileWeekSelectedDate || mobileWeekSelectedDate<start || mobileWeekSelectedDate>end){
+    mobileWeekSelectedDate=currentDate>=start&&currentDate<=end?currentDate:start;
+  }
+  const dates=[];for(let i=0;i<7;i++)dates.push(addDays(start,i));
+  const el=document.getElementById('mobileWeekView');
+  el.innerHTML=`<div class="mobile-week-tabs">${
+    dates.map(d=>{
+      const dt=parseDate(d),w=['日','一','二','三','四','五','六'][dt.getDay()];
+      return `<button class="mobile-week-tab ${d===mobileWeekSelectedDate?'active':''}" onclick="selectMobileWeekDate('${d}')">${w}<b>${dt.getMonth()+1}/${dt.getDate()}</b></button>`;
+    }).join('')
+  }</div><div id="mobileWeekAgenda"></div>`;
+  const list=data.filter(c=>c.date===mobileWeekSelectedDate);
+  renderAgendaInto_('mobileWeekAgenda',list,null);
+  document.getElementById('mobileSummaryText').textContent=`本週 ${mobileFilteredCourses_(data).length} 筆`;
+}
+function selectMobileWeekDate(d){
+  mobileWeekSelectedDate=d;
+  renderMobileWeek_();
+}
+let mobileMonthRenderSeq=0;
+
+function buildMobileMonthHtml_(y,m,byDate={}){
+  const first=new Date(y,m,1),last=new Date(y,m+1,0);
+  const firstDow=first.getDay(),prevDays=new Date(y,m,0).getDate();
+  const cells=[];
+
+  for(let i=firstDow-1;i>=0;i--){
+    const day=prevDays-i,d=formatDate(new Date(y,m-1,day));
+    cells.push({d,day,muted:true});
+  }
+  for(let day=1;day<=last.getDate();day++){
+    cells.push({d:formatDate(new Date(y,m,day)),day,muted:false});
+  }
+  while(cells.length%7!==0){
+    const day=cells.length-(firstDow+last.getDate())+1;
+    const d=formatDate(new Date(y,m+1,day));
+    cells.push({d,day,muted:true});
+  }
+
+  return `<div class="mobile-month-card">
+    <div class="mobile-month-head">
+      <button onclick="moveMobileMonth(-1)">‹</button>
+      <strong>${y}年${m+1}月</strong>
+      <button onclick="moveMobileMonth(1)">›</button>
+    </div>
+    <div class="mobile-month-grid">
+      ${['日','一','二','三','四','五','六'].map(w=>`<div class="mobile-month-week">${w}</div>`).join('')}
+      ${cells.map(x=>{
+        const arr=byDate[x.d]||[];
+        const dots=arr.slice(0,6).map(c=>`<i style="background:${esc(c.color||'#9fd0a8')}"></i>`).join('');
+        return `<button class="mobile-month-day ${x.muted?'muted':''} ${x.d===currentDate?'selected':''}" onclick="selectMobileMonthDate('${x.d}')">
+          <span>${x.day}</span><span class="mobile-month-dots">${dots}</span>
+        </button>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+async function renderMobileMonth_(){
+  const seq=++mobileMonthRenderSeq;
+  const dt=parseDate(currentDate),y=dt.getFullYear(),m=dt.getMonth();
+  const key=`${y}-${String(m+1).padStart(2,'0')}`;
+  const el=document.getElementById('mobileMonthView');
+  if(!el)return;
+
+  // 先立即畫出月份，不等待 Apps Script。
+  const cached=monthCache[key];
+  if(!cached){
+    el.innerHTML=buildMobileMonthHtml_(y,m,{});
+    const summary=document.getElementById('mobileSummaryText');
+    if(summary)summary.textContent='本月課程載入中…';
+  }
+
+  try{
+    const raw=cached || await fetchMonthCached_(key+'-01');
+    if(seq!==mobileMonthRenderSeq || monthKey_(currentDate)!==key)return;
+
+    window.__mobileRangeCache=raw;
+    const data=mobileFilteredCourses_(raw);
+    const byDate={};
+    data.forEach(c=>(byDate[c.date]||(byDate[c.date]=[])).push(c));
+
+    el.innerHTML=buildMobileMonthHtml_(y,m,byDate);
+    const summary=document.getElementById('mobileSummaryText');
+    if(summary)summary.textContent=`本月 ${data.length} 筆`;
+
+    // 當月完成後，背景預抓前後月份。
+    prefetchAdjacentMonths_(currentDate);
+  }catch(e){
+    console.error(e);
+    if(seq!==mobileMonthRenderSeq)return;
+    const summary=document.getElementById('mobileSummaryText');
+    if(summary)summary.textContent='月份資料載入失敗';
+  }
+}
+function moveMobileMonth(delta){
+  const d=parseDate(currentDate);
+  const next=formatDate(new Date(d.getFullYear(),d.getMonth()+delta,1));
+  currentDate=next;
+  calendarBase=parseDate(next);
+  updateMobileHeader_();
+
+  // 不 await：畫面先立刻換月份，資料色點背景補上。
+  renderMobileMonth_();
+}
+async function selectMobileMonthDate(d){
+  currentDate=d;calendarBase=parseDate(d);
+  await switchView('day');
+}
+function openMobileCalendar(){
+  switchView('month');
+}
+function openMobileDetailById(id){
+  const all=[...(courses||[])];
+  const c=all.find(x=>String(x.id)===String(id)) || window.__mobileRangeCache?.find?.(x=>String(x.id)===String(id));
+  if(!c)return;
+  const rows=[];
+  const add=(k,v)=>{if(v)rows.push(`<div class="mobile-detail-row"><span class="k">${esc(k)}</span><span>${esc(v)}</span></div>`);};
+  add('系所',c.department);
+  add('日期',c.date);
+  add('教室',c.classroom);
+  add('時間',[c.startTime,c.endTime].filter(Boolean).join(' ～ '));
+  add('教師/借用人',c.person);
+  add('使用性質',c.useType);
+  add('備註',c.note);
+  document.getElementById('mobileDetailContent').innerHTML=`<div class="mobile-detail-title">${esc(c.title||'課程')}</div>${rows.join('')}`;
+  document.getElementById('mobileDetailBackdrop')?.classList.add('show');
+  document.getElementById('mobileDetailSheet')?.classList.add('show');
+  document.body.classList.add('mobile-detail-open');
+}
+function closeMobileDetail(){
+  document.getElementById('mobileDetailBackdrop')?.classList.remove('show');
+  document.getElementById('mobileDetailSheet')?.classList.remove('show');
+  document.body.classList.remove('mobile-detail-open');
+}
+
+
+let scheduleRenderSeq=0;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500);}
+function formatDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function parseDate(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
+function addDays(s,n){const d=parseDate(s);d.setDate(d.getDate()+n);return formatDate(d);}
+function weekdayZh(d){return ['日','一','二','三','四','五','六'][d.getDay()];}
+function updateTitle(){updateMobileHeader_();}
+async function loadRooms(){
+  try{
+    const key=monthKey_(currentDate);
+    const bootstrap=await server('getInitialData',[currentDate]);
+    allRooms=bootstrap?.rooms||[];
+    monthCache[key]=Array.isArray(bootstrap?.courses)?bootstrap.courses:[];
+    lastScheduleVersion=String(bootstrap?.version||'');
+    loadRoomOrder();
+    syncRoomSelections_(true);
+    populateFilters();
+    updateMobileHeader_();
+    await applyFilters();
+    prefetchAdjacentMonths_(currentDate);
+    startSchedulePolling_();
+  }catch(e){console.error(e);toast('讀取課表失敗');}
+}
+function loadRoomOrder(){const saved=JSON.parse(localStorage.getItem('room_order_v2')||'[]');if(!saved.length)return;const map=new Map(allRooms.map(r=>[r.name,r]));const ordered=[];saved.forEach(x=>{if(map.has(x.name)){ordered.push({...map.get(x.name),visible:x.visible!==false});map.delete(x.name)}});map.forEach(r=>ordered.push({...r,visible:true}));allRooms=ordered;}
+function populateFilters(){
+  const cat=document.getElementById('categorySelect');
+  const oldCat=cat.value||'全部';
+  const preferredOrder=['全部','100人以上','50-100人','50人以下','其他'];
+  const roomCategories=[...new Set(allRooms.map(r=>r.category).filter(Boolean))];
+  const categories=preferredOrder.filter(x=>x==='全部'||roomCategories.includes(x));
+  roomCategories.forEach(x=>{if(!categories.includes(x))categories.push(x);});
+  cat.innerHTML=categories.map(x=>`<option value="${esc(x)}">${esc(x==='全部'?'全部容量':x)}</option>`).join('');
+  if([...cat.options].some(o=>o.value===oldCat))cat.value=oldCat;
+  populateRoomSelect();
+  updateRoomFilterButton_();
+}
+function populateRoomSelect(){const el=document.getElementById('m_classroom');if(!el)return;el.innerHTML=allRooms.filter(r=>r.visible!==false).map(r=>`<option value="${esc(r.name)}">${esc(r.name)} (${esc(r.capacity||'')}人)</option>`).join('');}
+
+function syncRoomSelections_(forceAll=false){
+  const visible=allRooms.filter(r=>r.visible!==false).map(r=>r.name);
+  const valid=new Set(visible);
+  if(forceAll||selectedRoomNames.size===0){
+    selectedRoomNames=new Set(visible);
+  }else{
+    selectedRoomNames=new Set([...selectedRoomNames].filter(name=>valid.has(name)));
+  }
+  updateRoomFilterButton_();
+}
+function updateRoomFilterButton_(){
+  const el=document.getElementById('roomFilterCount');
+  if(!el)return;
+  const total=allRooms.filter(r=>r.visible!==false).length;
+  const count=[...selectedRoomNames].filter(name=>allRooms.some(r=>r.name===name&&r.visible!==false)).length;
+  el.textContent=count>=total?'全部':`${count}/${total}`;
+}
+function openRoomFilterModal(){
+  const list=document.getElementById('roomFilterList');
+  const rooms=allRooms.filter(r=>r.visible!==false);
+  list.innerHTML=rooms.map(r=>`
+    <label class="room-check-item">
+      <input class="room-filter-check" type="checkbox" value="${esc(r.name)}" ${selectedRoomNames.has(r.name)?'checked':''} onchange="updateRoomFilterModalCount_()">
+      <span class="room-check-name">${esc(r.name)}</span>
+      <span class="room-check-capacity">${r.capacity?esc(r.capacity)+'人':''}</span>
+    </label>
+  `).join('');
+  updateRoomFilterModalCount_();
+  document.getElementById('roomFilterModal').style.display='flex';
+}
+function updateRoomFilterModalCount_(){
+  const total=document.querySelectorAll('#roomFilterList .room-filter-check').length;
+  const checked=document.querySelectorAll('#roomFilterList .room-filter-check:checked').length;
+  const el=document.getElementById('roomFilterModalCount');
+  if(el)el.textContent=`已選 ${checked} / ${total} 間`;
+}
+function setAllRoomChecks(checked){
+  document.querySelectorAll('#roomFilterList .room-filter-check').forEach(cb=>cb.checked=checked);
+  updateRoomFilterModalCount_();
+}
+function applyRoomFilterModal(){
+  const checked=[...document.querySelectorAll('#roomFilterList .room-filter-check:checked')].map(cb=>cb.value);
+  selectedRoomNames=new Set(checked);
+  updateRoomFilterButton_();
+  closeModal('roomFilterModal');
+  applyFilters();
+}
+
+async function applyFilters(){
+  const cat=document.getElementById('categorySelect').value||'全部';
+  filteredRooms=allRooms.filter(r=>r.visible!==false&&(cat==='全部'||r.category===cat)&&selectedRoomNames.has(r.name));
+  if(currentView==='day')await loadDay(false);
+  else if(currentView==='week')await renderMobileWeek_();
+  else await renderMobileMonth_();
+}
+async function loadDay(force=false,existingToken=null){
+  updateTitle();
+  try{
+    const month=await ensureMonthLoaded(currentDate,force);
+    courses=clone(month.filter(c=>c.date===currentDate));
+    updateMobileHeader_();
+    if(currentView==='day')renderMobileDay_();
+  }catch(e){console.error(e);toast('讀取課程失敗');}
+}
+function clone(x){return JSON.parse(JSON.stringify(x||[]));}
+
+function monthKey_(dateStr){return String(dateStr||'').slice(0,7);}
+
+const monthInflight={};
+
+function monthDateFromKey_(key){
+  return key+'-01';
+}
+
+async function fetchMonthCached_(dateStr,force=false){
+  const key=monthKey_(dateStr);
+  if(!force && monthCache[key])return monthCache[key];
+
+  // 同一月份若已經正在抓，直接共用同一個 Promise，避免重複查詢。
+  if(!force && monthInflight[key])return monthInflight[key];
+
+  monthInflight[key]=server('getCoursesByMonth',[monthDateFromKey_(key)])
+    .then(data=>{
+      monthCache[key]=Array.isArray(data)?data:[];
+      return monthCache[key];
+    })
+    .finally(()=>{delete monthInflight[key];});
+
+  return monthInflight[key];
+}
+
+function prefetchAdjacentMonths_(dateStr){
+  const d=parseDate(dateStr);
+  [-1,1].forEach(delta=>{
+    const target=formatDate(new Date(d.getFullYear(),d.getMonth()+delta,1));
+    const key=monthKey_(target);
+    if(!monthCache[key]&&!monthInflight[key]){
+      // 背景預抓，不阻塞畫面。
+      fetchMonthCached_(target).catch(()=>{});
+    }
+  });
+}
+
+async function ensureMonthLoaded(dateStr,force=false){
+  return fetchMonthCached_(dateStr,force);
+}
+async function getRangeCached(start,end){
+  const keys=[];
+  let d=parseDate(start),e=parseDate(end);
+  d=new Date(d.getFullYear(),d.getMonth(),1);
+  while(d<=e){
+    keys.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    d=new Date(d.getFullYear(),d.getMonth()+1,1);
+  }
+  const arrays=await Promise.all(keys.map(key=>fetchMonthCached_(key+'-01')));
+  return arrays.flat().filter(c=>c.date>=start&&c.date<=end);
+}
+
+function textColor(hex){if(!/^#[0-9a-f]{6}$/i.test(hex||''))return'#20304a';const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return (r*299+g*587+b*114)/1000>155?'#20304a':'#fff';}
+function goToday(){onDateChange(formatDate(new Date()));}
+async function onDateChange(v){
+  currentDate=v;calendarBase=parseDate(v);updateMobileHeader_();
+  if(currentView==='day')await loadDay(false);
+  else if(currentView==='week')await renderMobileWeek_();
+  else await renderMobileMonth_();
+}
+async function switchView(v){
+  currentView=v;
+  ['day','week','month'].forEach(x=>document.getElementById('view'+x[0].toUpperCase()+x.slice(1))?.classList.toggle('active',x===v));
+  document.getElementById('mobileDayView').classList.toggle('hidden',v!=='day');
+  document.getElementById('mobileWeekView').classList.toggle('hidden',v!=='week');
+  document.getElementById('mobileMonthView').classList.toggle('hidden',v!=='month');
+  updateMobileHeader_();
+  if(v==='day')await loadDay(false);
+  else if(v==='week')await renderMobileWeek_();
+  else await renderMobileMonth_();
+}
+async function refreshCurrentView(){
+  const token=beginScheduleRender();
+  delete monthCache[monthKey_(currentDate)];
+  if(currentView==='day')await loadDay(true,token);else await loadRangeView(token);
+}
+
+let pendingAddRoom='',pendingAddSlot='',chosenRepeatType='none';
+const USE_TYPE_COLORS={
+  '管院課程':'#9fd0a8',
+  '院外課程':'#8dbdf2',
+  '活動使用':'#f0c17f',
+  '會議使用':'#c5abe7'
+};
+const COLOR_USE_TYPES=Object.fromEntries(Object.entries(USE_TYPE_COLORS).map(([k,v])=>[v.toLowerCase(),k]));
+
+let importWorkbook=null,importRows=null,importPreviewResult=null;
+
+function closeModal(id){document.getElementById(id).style.display='none';}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function escAttr(s){return String(s??'').replace(/'/g,"\\'");} function cssEsc(s){return CSS.escape(String(s??''));}
+</script>
+</body>
+</html>

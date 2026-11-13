@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <!-- Apps Script 網頁應用程式需要 target="_top"，連結才不會開在 iframe 裡 -->
+<meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- GitHub Pages 版：先載入後端網址設定，再載入轉接頭（讓 google.script.run 改走 fetch 呼叫 GAS 的 doPost） -->
+  <script src="./config.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=3"></script>
+  <title>設備報修系統</title>
+  <!-- 英數字字型 IBM Plex Sans；中文自動落到微軟正黑體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    /* =========================================================
+       管院設備報修系統 V1.0.0　前台（Index.html）
+       版面：管院行政系統 介面模板交接手冊（V2.5.6）
+       用途：師生登記設備報修、查詢自己的處理進度。不需登入。
+       ========================================================= */
+    :root{
+      /* ---------- 品牌色 ---------- */
+      --navy:#1e3a8a;        /* 主色：頂欄、主要按鈕、選取線、勾選框 */
+      --navy-dark:#172b66;   /* 主色滑過 */
+      --navy-press:#0f1d45;  /* 主色按下 */
+      --navy-soft:#e8eefc;   /* 淡藍：品牌類小標籤 */
+      --floor-row:#edf1fb;   /* 表格分組列 */
+      --amber:#d97706;       /* 琥珀橘：徽章、警示數字、提示條色條 */
+
+      /* ---------- 中性色（Carbon Gray 10） ---------- */
+      --bg:#f4f4f4;            /* 頁面背景 */
+      --layer:#ffffff;         /* 面板、表格、抽屜 */
+      --field:#f4f4f4;         /* 輸入框底色 */
+      --layer-hover:#e8e8e8;   /* 滑過 */
+      --layer-active:#e0e0e0;  /* 表頭、選取底色 */
+      --border-subtle:#e0e0e0; /* 細分隔線 */
+      --border-strong:#8d8d8d; /* 輸入框底線 */
+      --disabled:#c6c6c6;      /* 停用 */
+      --placeholder:#a8a8a8;   /* 提示文字 */
+      --ink:#161616;           /* 主要文字 */
+      --muted:#525252;         /* 次要文字 */
+      --helper:#6f6f6f;        /* 說明文字 */
+      --focus:var(--navy);     /* 聚焦框 */
+
+      /* ---------- 狀態色（底色／文字） ---------- */
+      --ok-bg:#defbe6;   --ok:#0e6027;    /* 可用、開放、白名單 */
+      --out-bg:#fff1f1;  --out:#a2191f;   /* 佔用、黑名單、異常 */
+      --warn-bg:#fcf4d6; --warn:#8e6a00;  /* 待處理；提示條底色 */
+      --mute-bg:#e0e0e0; --mute:#161616;  /* 一般、不適用 */
+
+      /* ---------- 危險操作 ---------- */
+      --danger:#da1e28;
+      --danger-hover:#b81921;
+      --danger-row:#fff1f1;
+      --danger-row-hover:#ffd7d9;
+
+      /* ---------- 提示訊息 ---------- */
+      --toast-ok:#059669;
+      --toast-err:#e11d48;
+      --toast-info:#262626;
+    }
+
+    /* ===== 基礎 ===== */
+    *{box-sizing:border-box;margin:0;padding:0}
+    body,button,input,select,textarea{
+      font-family:"IBM Plex Sans","Microsoft JhengHei","微軟正黑體",ui-sans-serif,system-ui,sans-serif;
+      letter-spacing:.16px;
+    }
+    body{background:var(--bg);color:var(--ink);font-size:14px;min-height:100vh}
+    .rounded-circle{border-radius:50%}   /* 唯一允許的圓形：步驟數字、轉圈 */
+
+    /* ===== Lucide 圖示 ===== */
+    .licon{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex-shrink:0;stroke-width:2}
+    .licon-sm{width:1em;height:1em}
+    .licon-lg{width:1.5em;height:1.5em}
+    .licon-xl{width:2.5rem;height:2.5rem}
+
+    /* ===== 頂欄：48px 深藍 ===== */
+    .topbar{position:sticky;top:0;z-index:30;height:48px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:16px;padding:0 16px}
+    .topbar h1{font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .topbar .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .topbar .updated{font-size:11px;color:#c6c6c6;display:none}
+    .topbar .btn-top{height:32px;padding:0 12px;border:0;background:#fff;color:var(--ink);font-size:12px;font-weight:900;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+    @media (min-width:640px){
+      .topbar{padding:0 24px}
+      .topbar h1{font-size:16px}
+      .topbar .updated{display:inline}
+    }
+
+    /* ===== 外框：側欄＋主區 ===== */
+    .shell{display:flex;flex-direction:column;align-items:flex-start;width:100%}
+    @media (min-width:768px){.shell{flex-direction:row}}
+
+    /* ===== 側欄：桌機 208px 直向；手機橫向頁籤 ===== */
+    .nav-v2{width:100%;background:var(--layer);padding:8px 0;display:flex;overflow-x:auto;border-bottom:1px solid var(--border-subtle)}
+    .nav-btn{flex:0 0 auto;height:40px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:none;border:0;color:var(--muted);font-size:14px;text-align:left;cursor:pointer;white-space:nowrap}
+    .nav-btn:hover{background:var(--layer-hover);color:var(--ink)}
+    .nav-btn.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--navy)}   /* 手機：底部 2px 線 */
+    .nav-btn .count{height:18px;line-height:18px;min-width:20px;padding:0 6px;font-size:12px;text-align:center;background:var(--amber);color:#fff}
+    @media (min-width:768px){
+      .nav-v2{width:208px;flex-shrink:0;flex-direction:column;position:sticky;top:48px;align-self:flex-start;min-height:calc(100vh - 48px);overflow:visible;border-bottom:0}
+      .nav-btn{width:100%}
+      .nav-btn.on{background:var(--layer-active);box-shadow:inset 3px 0 0 var(--navy)}  /* 桌機：左側 3px 線 */
+    }
+
+    /* ===== 主區：一定要 w-full + min-w-0，避免寬表格撐破手機版面 ===== */
+    .main{flex:1;min-width:0;width:100%;padding:16px;display:flex;flex-direction:column;gap:16px}
+    @media (min-width:640px){.main{padding:24px}}
+
+    /* ===== KPI 磚：2／3／5 欄，間隔 1px 露出背景色 ===== */
+    .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--bg)}
+    @media (min-width:640px){.kpis{grid-template-columns:repeat(3,1fr)}}
+    @media (min-width:1024px){.kpis{grid-template-columns:repeat(5,1fr)}}
+    .kpi{background:var(--layer);padding:16px}
+    .kpi small{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted)}
+    .kpi b{display:block;font-size:28px;font-weight:600;line-height:1.4;padding-top:2px;margin-top:2px;color:var(--navy);font-variant-numeric:tabular-nums}
+    .kpi.alert b{color:var(--amber)}
+
+    /* ===== 需要處理提示條 ===== */
+    .attn{background:var(--warn-bg);border-left:3px solid var(--amber);padding:12px 16px;font-size:14px;display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center}
+    .attn strong{font-weight:600}
+    .attn a{color:var(--navy);text-decoration:underline;cursor:pointer}
+
+    /* ===== 面板與工具列 ===== */
+    .panel-v2{background:var(--layer)}
+    .toolbar-v2{min-height:48px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px}
+    .toolbar-v2 h2{font-size:20px;font-weight:400}
+    .toolbar-v2 .sp{flex:1}
+
+    /* ===== 輸入框：無外框、底線、聚焦 2px 深藍內框 ===== */
+    input[type=text],input[type=search],input[type=tel],input[type=number],input[type=date],select,textarea{
+      border:0;border-bottom:1px solid var(--border-strong);border-radius:0;background:var(--field);color:var(--ink);font-size:14px;padding:0 12px;
+    }
+    input:focus,select:focus,textarea:focus{outline:2px solid var(--focus);outline-offset:-2px}
+    input::placeholder,textarea::placeholder{color:var(--placeholder)}
+    input:disabled,select:disabled,textarea:disabled{color:#8d8d8d;border-bottom-color:transparent;cursor:not-allowed}
+    .field-v2{height:32px;min-width:200px}
+
+    /* ===== 按鈕：small 32px；抽屜底部 large 48px ===== */
+    .btn-v2{height:32px;padding:0 16px;border:0;border-radius:0;font-size:14px;font-weight:400;letter-spacing:.16px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;cursor:pointer;transition:background .07s;vertical-align:middle}
+    .btn-v2 + .btn-v2{margin-left:4px}
+    .btn-v2.pri{background:var(--navy);color:#fff}
+    .btn-v2.pri:hover{background:var(--navy-dark)}
+    .btn-v2.pri:active{background:var(--navy-press)}
+    .btn-v2.ghost{background:transparent;color:var(--navy)}
+    .btn-v2.ghost:hover{background:var(--layer-hover)}
+    .btn-v2.danger{background:var(--danger);color:#fff}
+    .btn-v2.danger:hover{background:var(--danger-hover)}
+    .btn-v2.danger-ghost{background:transparent;color:var(--danger)}
+    .btn-v2.danger-ghost:hover{background:var(--danger);color:#fff}
+    .btn-v2:disabled{background:var(--disabled)!important;color:#8d8d8d!important;cursor:not-allowed}
+    button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;box-shadow:inset 0 0 0 3px #fff}
+
+    /* ===== 資料表格 ===== */
+    .table-wrap{overflow-x:auto}   /* 手機：只有表格自己橫向捲動 */
+    .table-v2{width:100%;min-width:800px;border-collapse:collapse}
+    .table-v2 th{height:48px;background:var(--layer-active);text-align:left;font-size:14px;font-weight:600;padding:0 16px;white-space:nowrap}
+    .table-v2 td{height:48px;padding:6px 16px;font-size:14px;vertical-align:middle;border-bottom:1px solid var(--border-subtle)}
+    .table-v2 td:last-child{width:1%;white-space:nowrap}   /* 操作欄：最後一欄、不換行 */
+    .table-v2 tbody tr:not(.floor-v2):hover{background:var(--layer-hover)}
+    .table-v2 td .sub{display:block;font-size:12px;color:var(--muted)}
+    .floor-v2 td{background:var(--floor-row);color:var(--navy);font-weight:600}
+    .table-v2 tbody tr.row-blacklist{background:var(--danger-row)}
+    .table-v2 tbody tr.row-blacklist:hover{background:var(--danger-row-hover)}
+    .table-v2 tbody tr.row-disabled td{color:#8d8d8d}
+
+    /* ===== 狀態標籤與小標籤：直角、淡底深字 ===== */
+    .tag-v2{display:inline-block;height:24px;line-height:24px;padding:0 8px;font-size:12px;white-space:nowrap}
+    .tag-v2.ok{background:var(--ok-bg);color:var(--ok)}
+    .tag-v2.out{background:var(--out-bg);color:var(--out)}
+    .tag-v2.warn{background:var(--warn-bg);color:var(--warn)}
+    .tag-v2.mute{background:var(--mute-bg);color:var(--mute)}
+    .chip-v2{display:inline-block;height:24px;line-height:24px;padding:0 8px;font-size:12px;margin:2px 4px 2px 0;white-space:nowrap}
+    .chip-v2.key{background:var(--navy-soft);color:var(--navy)}
+    .chip-v2.eq{background:var(--layer-active);color:var(--ink)}
+
+    /* ===== 勾選框（取代開關） ===== */
+    .check-v2{display:flex;align-items:flex-start;gap:10px;cursor:pointer;user-select:none;position:relative}
+    .check-v2 input{position:absolute;opacity:0;width:1px;height:1px}
+    .check-box{flex-shrink:0;position:relative;width:18px;height:18px;margin-top:2px;border:1px solid #161616;border-radius:2px;background:#fff;transition:background .07s}
+    .check-v2 input:checked + .check-box{background:var(--navy);border-color:var(--navy)}
+    .check-v2 input:checked + .check-box::after{content:'';position:absolute;left:5px;top:1px;width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+    .check-v2 input:focus-visible + .check-box{outline:2px solid var(--focus);outline-offset:1px}
+    .check-v2:hover .check-box{border-color:var(--navy)}
+    .check-v2 input:disabled + .check-box{border-color:var(--disabled);background:var(--bg)}
+    .check-v2 input:disabled ~ .check-text{color:#8d8d8d;cursor:not-allowed}
+    .check-text{display:flex;flex-direction:column;gap:2px;font-size:14px}
+    .check-text small{font-size:12px;color:var(--helper)}
+
+    /* ===== 單選列表 ===== */
+    .radio-group-v2{display:grid;border-top:1px solid var(--border-subtle)}
+    .radio-v2{display:flex;gap:12px;align-items:flex-start;padding:12px 4px;border-bottom:1px solid var(--border-subtle);cursor:pointer}
+    .radio-v2:hover{background:var(--layer-hover)}
+    .radio-v2 input{width:18px;height:18px;margin-top:2px;accent-color:var(--navy);flex-shrink:0}
+    .radio-v2 span{display:flex;flex-direction:column;gap:2px;font-size:14px}
+    .radio-v2 small{font-size:12px;color:var(--helper)}
+
+    /* ===== 抽屜：桌機貼右 400px；1024px 以下置中彈窗 ===== */
+    .overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,23,.4);backdrop-filter:blur(4px)}
+    .overlay.open{display:flex}
+    .overlay.danger-layer{z-index:60}   /* 刪除確認要蓋過抽屜 */
+    .drawer-v2{width:100%;max-width:576px;max-height:90vh;background:var(--layer);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.25)}
+    .drawer-v2.sm{max-width:448px}
+    @media (min-width:1024px){
+      .overlay.side{padding:0;justify-content:flex-end;align-items:stretch;background:transparent;backdrop-filter:none}
+      .overlay.side .drawer-v2{width:400px;max-width:400px;max-height:none;height:100%;box-shadow:-8px 0 24px rgba(15,23,42,.10)}
+    }
+    .drawer-v2 header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;background:var(--navy);color:#fff}
+    .drawer-v2 header.danger{background:var(--danger)}
+    .drawer-v2 header small{font-size:12px;opacity:.75}
+    .drawer-v2 header h3{font-size:20px;font-weight:400;margin-top:2px}
+    .drawer-close{width:32px;height:32px;border:0;background:transparent;color:#fff;cursor:pointer;flex-shrink:0;font-size:16px}
+    .drawer-close:hover{background:rgba(255,255,255,.12)}
+    .drawer-v2 .body{flex:1;overflow-y:auto;padding:16px 20px}
+    .drawer-v2 .field-group{margin-top:16px}
+    .drawer-v2 .field-group:first-child{margin-top:0}
+    .drawer-v2 .field-label{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted);margin-bottom:6px}
+    .drawer-v2 .field-help{font-size:12px;letter-spacing:.32px;color:var(--helper);margin-top:4px}
+    /* 勾選框與單選鈕不套用 40px 整寬，否則會被撐大 */
+    .drawer-v2 input:not([type=radio]):not([type=checkbox]),.drawer-v2 select{height:40px;width:100%}
+    .drawer-v2 textarea{width:100%;padding:10px 12px;resize:vertical}
+    .drawer-v2 .row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-subtle)}
+    .drawer-v2 .row .nm{flex:1;min-width:0}
+    .drawer-v2 .row .nm b{display:flex;align-items:center;gap:6px}
+    .drawer-v2 .row .nm small{display:block;margin-top:2px;font-size:12px;color:var(--helper)}
+    .drawer-v2 .foot{display:grid;gap:10px;padding:16px 20px;background:var(--layer)}
+    .drawer-v2 .foot .btn-v2{height:48px;width:100%;justify-content:flex-start;margin-left:0}
+
+    /* ===== 數量調整器 ===== */
+    .stepper-v2{display:flex;align-items:center;background:var(--field)}
+    .stepper-v2 button{width:36px;height:36px;border:0;background:none;color:var(--navy);cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .stepper-v2 button:hover{background:var(--layer-hover)}
+    .stepper-v2 span{min-width:32px;text-align:center;font-weight:600}
+
+    /* ===== 提示訊息與空狀態 ===== */
+    .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;max-width:90vw;padding:12px 16px;font-size:12px;font-weight:700;color:#fff;display:none;box-shadow:0 10px 24px rgba(0,0,0,.2)}
+    .toast.show{display:block}
+    .toast.ok{background:var(--toast-ok)}
+    .toast.err{background:var(--toast-err)}
+    .toast.info{background:var(--toast-info)}
+    .empty{padding:64px 16px;text-align:center}
+    .empty .ico{width:56px;height:56px;margin:0 auto;background:var(--bg);color:var(--helper);display:flex;align-items:center;justify-content:center}
+    .empty h3{font-size:14px;font-weight:900;margin-top:16px}
+    .empty p{font-size:12px;color:var(--helper);margin-top:4px}
+    /* =========================================================
+       報修系統補充樣式（沿用模板變數，不新增色碼）
+       ========================================================= */
+    /* 讀取中：36px 轉圈＋文字（手冊 5.9） */
+    .loading{padding:64px 16px;text-align:center;font-size:12px;color:var(--helper)}
+    .loading p{margin-top:12px}
+    .spinner{width:36px;height:36px;margin:0 auto;border:3px solid var(--layer-active);border-top-color:var(--navy);animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* 表單主體：步驟區塊之間 32px，欄位組之間 16px */
+    .form-body{padding:16px;display:grid;gap:32px}
+    @media (min-width:640px){.form-body{padding:8px 24px 24px}}
+    .sec-title{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600;margin-bottom:16px}
+    .step-no{width:24px;height:24px;flex-shrink:0;background:var(--navy);color:#fff;font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+    .grid2{display:grid;gap:16px}
+    @media (min-width:640px){.grid2{grid-template-columns:1fr 1fr}}
+    .stack{display:grid;gap:16px}
+
+    /* 表單欄位（抽屜外的頁面也用同一套寫法：名稱 → 輸入框 → 說明） */
+    .fg .field-label{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted);margin-bottom:6px}
+    .fg .field-help{font-size:12px;letter-spacing:.32px;color:var(--helper);margin-top:4px}
+    .fg input:not([type=radio]):not([type=checkbox]):not([type=file]),.fg select{height:40px;width:100%}
+    .fg textarea{width:100%;min-height:112px;padding:10px 12px;resize:vertical}
+    .fg .counter{float:right;font-variant-numeric:tabular-nums}
+    .inline{display:flex;gap:4px}
+    .inline input{flex:1;min-width:0}
+    .inline .btn-v2{height:40px;margin-left:0}
+    .btn-v2.lg{height:48px;justify-content:flex-start}
+    .full{width:100%}
+
+    /* 名冊帶入結果：淡藍底，不用外框 */
+    .info-box{background:var(--navy-soft);padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;font-size:14px}
+    .info-box b{color:var(--navy);font-weight:600}
+    .info-box .sp{flex:1}
+
+    /* 照片縮圖：直角方塊 */
+    .photo-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .photo-item{width:96px}
+    .photo-item img{display:block;width:96px;height:96px;object-fit:cover;background:var(--field)}
+    .photo-item .btn-v2{width:100%;height:28px;padding:0;margin:0;font-size:12px}
+    .file-btn{position:relative;overflow:hidden}
+    .file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+    /* 資料清單（抽屜內的欄位：值） */
+    .kv{display:grid;grid-template-columns:84px 1fr;gap:8px 12px;font-size:14px}
+    .kv dt{font-size:12px;letter-spacing:.32px;color:var(--muted);padding-top:2px}
+    .kv dd{word-break:break-word;white-space:pre-wrap}
+
+    /* 處理進度時間軸：分隔線清單 */
+    .tl{border-top:1px solid var(--border-subtle)}
+    .tl-item{padding:12px 0;border-bottom:1px solid var(--border-subtle);display:grid;gap:6px}
+    .tl-item .meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:var(--helper)}
+    .tl-item p{font-size:14px;white-space:pre-wrap;word-break:break-word}
+    .tl-item .internal{font-size:12px;color:var(--warn);background:var(--warn-bg);padding:6px 8px}
+
+    /* 抽屜／彈窗內的小標題 */
+    .sub-title{font-size:12px;letter-spacing:.32px;color:var(--muted);margin:20px 0 8px}
+
+    /* 成功畫面的案件編號 */
+    .big-id{font-size:28px;font-weight:600;line-height:1.4;padding-top:2px;color:var(--navy);font-variant-numeric:tabular-nums}
+
+    /* 防機器人隱藏欄位：移出畫面但保留在表單中 */
+    .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+
+    /* 「處理中」標籤：借用品牌淡藍（進行中的事，不是警示，也不是完成） */
+    .tag-v2.doing{background:var(--navy-soft);color:var(--navy)}
+
+    /* 表格底部「已顯示 N / M」 */
+    .more{display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:12px;color:var(--helper)}
+    .clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:320px}
+    .nowrap{white-space:nowrap}
+    .hidden{display:none!important}
+    /* ===== 前台專用 ===== */
+    /* 手冊 10.6：手機端主要按鈕放大到 48px */
+    .submit-row{display:grid;gap:8px}
+    @media (min-width:640px){.submit-row{grid-template-columns:320px 1fr;align-items:center}}
+    .notice{font-size:12px;color:var(--helper);line-height:1.7}
+  </style>
+</head>
+<body>
+  <!-- ===== 頂欄 ===== -->
+  <header class="topbar">
+    <h1 id="sysName">設備報修系統</h1>
+    <div class="right"><span class="updated">管理學院院辦</span></div>
+  </header>
+
+  <div class="shell">
+    <!-- ===== 側欄：手機自動變成上方橫向頁籤 ===== -->
+    <nav class="nav-v2" id="nav"></nav>
+
+    <main class="main">
+      <!-- ================= 頁籤一：登記報修 ================= -->
+      <section class="panel-v2" id="view-report">
+        <div class="toolbar-v2">
+          <h2>登記報修</h2>
+          <span class="sp"></span>
+          <span class="notice">標示 * 為必填。漏水、冒煙、跳電等緊急狀況請直接到院辦或來電。</span>
+        </div>
+
+        <div class="loading" id="bootLoading"><div class="spinner rounded-circle"></div><p>讀取資料中...</p></div>
+
+        <form class="form-body hidden" id="repairForm" autocomplete="off" onsubmit="event.preventDefault();openConfirm();">
+          <!-- 防機器人欄位：真人看不到，機器人會填 -->
+          <div class="hp" aria-hidden="true"><label>網站<input type="text" id="website" tabindex="-1"></label></div>
+
+          <!-- 步驟 1：報修人 -->
+          <section>
+            <h3 class="sec-title"><span class="step-no rounded-circle">1</span>報修人資料</h3>
+            <div class="stack">
+              <div class="fg">
+                <label class="field-label" for="sid">學號 / 員編 *</label>
+                <div class="inline">
+                  <input type="text" id="sid" inputmode="numeric" maxlength="20" placeholder="例如 112213001" oninput="onSidInput(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();doLookup();}">
+                  <button type="button" class="btn-v2 pri" id="lookupBtn" onclick="doLookup()"><span data-icon="search"></span>查詢</button>
+                </div>
+                <p class="field-help" id="sidHelp">輸入後按「查詢」。名冊有資料時會自動帶入。</p>
+              </div>
+
+              <!-- 名冊帶入結果 -->
+              <div class="info-box hidden" id="rosterBox">
+                <span>已帶入名冊資料</span>
+                <b id="rosterText"></b>
+                <span class="sp"></span>
+                <button type="button" class="btn-v2 ghost" onclick="useManual(true)">修改聯絡資料</button>
+              </div>
+
+              <!-- 手動填寫（名冊沒有此人，或選擇修改聯絡資料） -->
+              <div class="grid2 hidden" id="manualBox">
+                <div class="fg">
+                  <label class="field-label" for="reporter">姓名 *</label>
+                  <input type="text" id="reporter" maxlength="30" placeholder="例如 王小明">
+                </div>
+                <div class="fg">
+                  <label class="field-label" for="dept">系所 / 單位 *</label>
+                  <input type="text" id="dept" maxlength="30" placeholder="例如 資訊管理學系">
+                </div>
+                <div class="fg">
+                  <label class="field-label" for="phone">聯絡電話 *</label>
+                  <input type="tel" id="phone" inputmode="numeric" maxlength="15" placeholder="例如 0912345678" oninput="this.value=this.value.replace(/\D/g,'')">
+                  <p class="field-help">只輸入數字；教職員可填校內分機。院辦需要確認現場狀況時會聯絡你。</p>
+                </div>
+                <div class="fg" id="manualNote">
+                  <p class="field-help" id="manualHelp"></p>
+                  <button type="button" class="btn-v2 ghost hidden" id="backRosterBtn" onclick="useManual(false)">改回名冊資料</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 步驟 2：地點與項目 -->
+          <section>
+            <h3 class="sec-title"><span class="step-no rounded-circle">2</span>報修地點與項目</h3>
+            <div class="stack">
+              <div class="grid2">
+                <div class="fg">
+                  <label class="field-label" for="group">樓層 / 區域 *</label>
+                  <select id="group" onchange="onGroupChange()"></select>
+                </div>
+                <div class="fg">
+                  <label class="field-label" for="location">報修地點 *</label>
+                  <select id="location" onchange="onLocationChange()" disabled><option value="">請先選樓層 / 區域</option></select>
+                </div>
+              </div>
+              <div class="fg hidden" id="otherBox">
+                <label class="field-label" for="otherLocation">自填地點 * <span class="counter" id="otherCount">0 / 100</span></label>
+                <input type="text" id="otherLocation" maxlength="100" placeholder="例如 管院一樓男廁、B1 樓梯間" oninput="updateCounter(this,'otherCount')">
+              </div>
+              <!-- 同地點已有未結案報修時提醒，避免重複登記 -->
+              <div class="attn hidden" id="dupBar"></div>
+              <div class="fg">
+                <label class="field-label" for="item">報修項目 *</label>
+                <select id="item"></select>
+                <p class="field-help">「耗材補充」是白板筆、粉筆等用完需要補的東西，院辦會優先處理。</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- 步驟 3：說明與照片 -->
+          <section>
+            <h3 class="sec-title"><span class="step-no rounded-circle">3</span>故障說明與照片</h3>
+            <div class="stack">
+              <div class="fg">
+                <label class="field-label" for="desc">故障說明 * <span class="counter" id="descCount">0 / 1200</span></label>
+                <textarea id="desc" maxlength="1200" placeholder="例如：投影機開機後畫面閃爍，大約 5 分鐘後自動關機。今天第 3、4 節都有發生。" oninput="updateCounter(this,'descCount')"></textarea>
+                <p class="field-help">寫出「哪裡、什麼狀況、何時開始」，院辦比較能判斷要找誰處理。</p>
+              </div>
+              <div class="fg">
+                <span class="field-label">照片（選填）</span>
+                <span class="btn-v2 ghost file-btn" id="photoBtn"><span data-icon="image"></span>選擇照片
+                  <input type="file" id="photoInput" accept="image/*" multiple onchange="onPhotoPick(this)">
+                </span>
+                <p class="field-help" id="photoHelp">最多 3 張，系統會自動壓縮並轉成 JPG。</p>
+                <div class="photo-grid" id="photoGrid"></div>
+              </div>
+            </div>
+          </section>
+
+          <div class="submit-row">
+            <button type="submit" class="btn-v2 pri lg full" id="submitBtn">確認送出</button>
+            <span class="notice">送出後會顯示案件編號。之後用學號（或案件編號）加電話後四碼，就能在「查詢進度」看到處理情形。</span>
+          </div>
+        </form>
+      </section>
+
+      <!-- ================= 頁籤二：查詢進度 ================= -->
+      <section class="panel-v2 hidden" id="view-query">
+        <div class="toolbar-v2"><h2>查詢進度</h2></div>
+        <form class="form-body" onsubmit="event.preventDefault();doQuery();" style="gap:16px">
+          <div class="grid2">
+            <div class="fg">
+              <label class="field-label" for="qKeyword">學號 / 員編或案件編號 *</label>
+              <input type="text" id="qKeyword" maxlength="20" placeholder="例如 112213001 或 #12">
+            </div>
+            <div class="fg">
+              <label class="field-label" for="qLast4">報修時填的電話後四碼 *</label>
+              <input type="tel" id="qLast4" inputmode="numeric" maxlength="4" placeholder="例如 5678" oninput="this.value=this.value.replace(/\D/g,'')">
+            </div>
+          </div>
+          <div><button type="submit" class="btn-v2 pri" id="queryBtn"><span data-icon="search"></span>查詢</button></div>
+        </form>
+        <div id="queryResult"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===== 送出前確認（置中彈窗） ===== -->
+  <div class="overlay" id="confirmModal">
+    <div class="drawer-v2" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <header>
+        <div><small>CONFIRM</small><h3 id="confirmTitle">最後確認一次再送出</h3></div>
+        <button class="drawer-close" aria-label="關閉" onclick="closeOverlay('confirmModal')"><span data-icon="x"></span></button>
+      </header>
+      <div class="body"><dl class="kv" id="confirmBody"></dl></div>
+      <div class="foot">
+        <button class="btn-v2 pri" id="confirmBtn" onclick="doSubmit(this)">確認送出</button>
+        <button class="btn-v2 ghost" onclick="closeOverlay('confirmModal')">返回修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 送出成功 ===== -->
+  <div class="overlay" id="doneModal">
+    <div class="drawer-v2 sm" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+      <header>
+        <div><small>SUBMITTED</small><h3 id="doneTitle">報修已送出</h3></div>
+        <button class="drawer-close" aria-label="關閉" onclick="closeOverlay('doneModal')"><span data-icon="x"></span></button>
+      </header>
+      <div class="body">
+        <p class="field-help">案件編號</p>
+        <div class="big-id" id="doneId">#--</div>
+        <p style="margin-top:8px" id="doneMsg"></p>
+      </div>
+      <div class="foot">
+        <button class="btn-v2 pri" onclick="closeOverlay('doneModal');resetForm();">再登記一筆</button>
+        <button class="btn-v2 ghost" onclick="closeOverlay('doneModal');goQueryAfterSubmit();">查詢進度</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 案件詳情（查詢進度用） ===== -->
+  <div class="overlay side" id="caseDrawer">
+    <div class="drawer-v2" role="dialog" aria-modal="true" aria-labelledby="caseTitle">
+      <header>
+        <div><small>REPAIR CASE</small><h3 id="caseTitle">案件</h3></div>
+        <button class="drawer-close" aria-label="關閉" onclick="closeOverlay('caseDrawer')"><span data-icon="x"></span></button>
+      </header>
+      <div class="body" id="caseBody"></div>
+      <div class="foot"><button class="btn-v2 ghost" onclick="closeOverlay('caseDrawer')">關閉</button></div>
+    </div>
+  </div>
+
+  <!-- ===== 提示訊息 ===== -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* =========================================================
+       共用工具：Lucide 圖示、提示訊息、跳脫字元、狀態標籤
+       （Index 與 Admin 兩份相同，修改時請兩邊一起改）
+       ========================================================= */
+
+    /* ===== Lucide 圖示（https://lucide.dev，ISC 授權，v0.469.0）=====
+       SVG 內嵌，不需要外部 CDN。新增圖示：到 lucide.dev 複製 SVG 內部的 path，加進這個物件。
+       前 12 個沿用起手模板；wrench 以下為報修系統新增。 */
+    const LUCIDE={
+      'air-vent':'<path d="M6 12H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 8h12" /><path d="M18.3 17.7a2.5 2.5 0 0 1-3.16 3.83 2.53 2.53 0 0 1-1.14-2V12" /><path d="M6.6 15.6A2 2 0 1 0 10 17v-5" />',
+      'arrow-right-left':'<path d="m16 3 4 4-4 4" /><path d="M20 7H4" /><path d="m8 21-4-4 4-4" /><path d="M4 17h16" />',
+      'building-2':'<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" /><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" /><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" /><path d="M10 6h4" /><path d="M10 10h4" /><path d="M10 14h4" /><path d="M10 18h4" />',
+      'calendar':'<path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" />',
+      'inbox':'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />',
+      'key-round':'<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".5" fill="currentColor" />',
+      'minus':'<path d="M5 12h14" />',
+      'package':'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /><path d="M12 22V12" /><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7" /><path d="m7.5 4.27 9 5.15" />',
+      'plus':'<path d="M5 12h14" /><path d="M12 5v14" />',
+      'refresh-cw':'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />',
+      'triangle-alert':'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" />',
+      'x':'<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
+      'wrench':'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />',
+      'search':'<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />',
+      'image':'<rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />',
+      'map-pin':'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" />',
+      'users':'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />',
+      'archive':'<rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" />',
+      'tag':'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /><circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />',
+      'clipboard-list':'<rect width="8" height="4" x="8" y="2" rx="1" ry="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><path d="M12 11h4" /><path d="M12 16h4" /><path d="M8 11h.01" /><path d="M8 16h.01" />'
+    };
+
+    /* 產生圖示 SVG 字串；cls 可加 'licon-sm'、'licon-lg'、'licon-xl' */
+    function licon(name,cls){
+      const body=LUCIDE[name];
+      if(!body)return '';
+      return '<svg class="licon'+(cls?' '+cls:'')+'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+body+'</svg>';
+    }
+
+    /* 把靜態 HTML 中的 <span data-icon="名稱"> 換成 SVG 圖示 */
+    function hydrateIcons(root=document){
+      root.querySelectorAll('[data-icon]').forEach(el=>{el.outerHTML=licon(el.dataset.icon);});
+    }
+
+    /* 跳脫 HTML：所有使用者輸入的文字放進畫面前一定要經過這裡，避免被插入程式碼 */
+    function esc(v){
+      return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    /* 狀態標籤：一個狀態對應一組顏色，跨系統不換意義 */
+    const STATUS_TAG={'待處理':'warn','處理中':'doing','已完成':'ok','已取消':'mute'};
+    function statusTag(s){return '<span class="tag-v2 '+(STATUS_TAG[s]||'mute')+'">'+esc(s||'--')+'</span>';}
+
+    /* 雲端硬碟連結轉縮圖網址（檔案需為「知道連結者可檢視」或同網域） */
+    function driveThumb(url,size){
+      const m=String(url||'').match(/\/d\/([\w-]+)/)||String(url||'').match(/[?&]id=([\w-]+)/);
+      return m?'https://lh3.googleusercontent.com/d/'+m[1]+'='+(size||'s400'):url;
+    }
+
+    /* 「2026-11-10 08:30:00」轉 Date（固定台北時區） */
+    function parseTime(s){
+      if(!s)return null;
+      const d=new Date(String(s).replace(' ','T')+'+08:00');
+      return isNaN(d.getTime())?null:d;
+    }
+    /* 距今幾天（不足一天算 0） */
+    function daysSince(s){const d=parseTime(s);return d?Math.floor((Date.now()-d.getTime())/86400000):0;}
+
+    /* ===== 提示訊息：type 為 ok／err／info，3.5 秒後消失 ===== */
+    function showToast(msg,type='info'){
+      const t=document.getElementById('toast');
+      t.textContent=msg;
+      t.className='toast show '+type;
+      clearTimeout(showToast._timer);
+      showToast._timer=setTimeout(()=>t.classList.remove('show'),3500);
+    }
+
+    /* google.script.run 的 Promise 版，讓流程好讀 */
+    function api(fn,...args){
+      return new Promise((resolve,reject)=>{
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(err=>reject(err&&err.message?err:new Error(String(err))))[fn](...args);
+      });
+    }
+    /* 後端錯誤訊息常帶「Error: 」前綴，顯示前去掉 */
+    function errMsg(err){return String(err&&err.message||err||'發生未知錯誤').replace(/^(Exception|Error):\s*/,'');}
+
+    /* 抽屜與視窗 */
+    function openOverlay(id){document.getElementById(id).classList.add('open');}
+    function closeOverlay(id){document.getElementById(id).classList.remove('open');}
+
+    /* 送出中：按鈕停用並改字，完成後還原，避免重複送出 */
+    function busy(btn,on,text){
+      if(!btn)return;
+      if(on){btn.dataset.label=btn.innerHTML;btn.disabled=true;btn.textContent='處理中…';}
+      else{btn.disabled=false;btn.innerHTML=text||btn.dataset.label||btn.innerHTML;}
+    }
+
+    /* =========================================================
+       前台狀態
+       ========================================================= */
+    const ST={
+      boot:null,                 // 後端給的地點、項目、上限
+      lookup:{sid:'',done:false,found:false,manual:false,data:null},  // 學號查詢結果
+      photos:[],                 // 已壓縮的照片 [{data,name}]
+      submitting:false,
+      lastId:'',                 // 剛送出的案件編號，給「查詢進度」帶入
+      lastResults:[]             // 查詢結果，開詳情用
+    };
+
+    /* ===== 側欄頁籤 ===== */
+    const TABS=[
+      {id:'report',label:'登記報修',icon:'wrench'},
+      {id:'query',label:'查詢進度',icon:'search'}
+    ];
+    let currentTab='report';
+    function renderNav(){
+      document.getElementById('nav').innerHTML=TABS.map(t=>
+        `<button class="nav-btn${t.id===currentTab?' on':''}" onclick="switchTab('${t.id}')">
+          <span>${t.label}</span>
+        </button>`).join('');
+    }
+    function switchTab(id){
+      currentTab=id;renderNav();
+      document.getElementById('view-report').classList.toggle('hidden',id!=='report');
+      document.getElementById('view-query').classList.toggle('hidden',id!=='query');
+    }
+
+    /* =========================================================
+       初始化：取得地點與項目
+       ========================================================= */
+    async function init(){
+      renderNav();hydrateIcons();
+      try{
+        const b=await api('getPublicBootstrap');
+        ST.boot=b;
+        document.title=b.systemName;
+        document.getElementById('sysName').textContent=b.systemName;
+        document.getElementById('photoHelp').textContent='最多 '+b.maxPhotos+' 張、每張 10 MB 以內，系統會自動壓縮並轉成 JPG（iPhone 的 HEIC 也會轉）。';
+        fillGroups();fillItems();
+        document.getElementById('bootLoading').classList.add('hidden');
+        document.getElementById('repairForm').classList.remove('hidden');
+      }catch(err){
+        document.getElementById('bootLoading').innerHTML='<div class="empty"><div class="ico">'+licon('triangle-alert','licon-lg')+'</div><h3>載入失敗</h3><p>'+esc(errMsg(err))+'。請重新整理頁面，持續發生請洽院辦。</p></div>';
+      }
+    }
+
+    /* 樓層／區域下拉：依地點清單的順序取不重複的分組，最後加「其他地點」 */
+    function fillGroups(){
+      const groups=[];
+      ST.boot.locations.forEach(l=>{if(groups.indexOf(l.group)<0)groups.push(l.group);});
+      let html='<option value="">請選擇</option>'+groups.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('');
+      if(ST.boot.allowOther)html+='<option value="__OTHER_GROUP__">其他地點（自行填寫）</option>';
+      document.getElementById('group').innerHTML=html;
+    }
+    function onGroupChange(){
+      const g=document.getElementById('group').value;
+      const sel=document.getElementById('location');
+      const other=g==='__OTHER_GROUP__';
+      document.getElementById('otherBox').classList.toggle('hidden',!other);
+      if(other){
+        sel.innerHTML=`<option value="${ST.boot.otherId}">其他地點</option>`;sel.disabled=true;sel.value=ST.boot.otherId;
+      }else if(g){
+        sel.innerHTML='<option value="">請選擇</option>'+ST.boot.locations.filter(l=>l.group===g)
+          .map(l=>`<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+        sel.disabled=false;
+      }else{
+        sel.innerHTML='<option value="">請先選樓層 / 區域</option>';sel.disabled=true;
+      }
+      onLocationChange();
+    }
+
+    /* 選定地點後查這裡有沒有未結案報修 */
+    async function onLocationChange(){
+      const bar=document.getElementById('dupBar');
+      const id=document.getElementById('location').value;
+      bar.classList.add('hidden');
+      if(!id||id===ST.boot.otherId)return;
+      try{
+        const list=await api('getOpenByLocation',id);
+        if(document.getElementById('location').value!==id||!list.length)return;  // 使用者已改選其他地點
+        bar.innerHTML='<span><strong>這個地點已有 '+list.length+' 筆處理中的報修</strong>：'+
+          list.map(x=>esc(x.item)+'（'+esc(x.status)+'，'+esc(x.date.slice(5))+'）').join('、')+
+          '。如果是同一個問題，不必重複登記；有新狀況再送出即可。</span>';
+        bar.classList.remove('hidden');
+      }catch(err){/* 提醒失敗不影響報修 */}
+    }
+
+    /* 報修項目：依分類分組（設備故障／耗材補充／其他） */
+    function fillItems(){
+      const groups={};const order=[];
+      ST.boot.items.forEach(i=>{if(!groups[i.group]){groups[i.group]=[];order.push(i.group);}groups[i.group].push(i);});
+      document.getElementById('item').innerHTML='<option value="">請選擇</option>'+order.map(g=>
+        `<optgroup label="${esc(g)}">${groups[g].map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('')}</optgroup>`).join('');
+    }
+
+    function updateCounter(el,id){document.getElementById(id).textContent=el.value.length+' / '+el.maxLength;}
+
+    /* =========================================================
+       步驟 1：學號查詢與名冊帶入
+       ========================================================= */
+    function onSidInput(el){
+      el.value=el.value.replace(/\D/g,'');   // 只能輸入數字，後端也會再驗一次
+      if(el.value!==ST.lookup.sid){         // 學號改了就要重新查
+        ST.lookup={sid:'',done:false,found:false,manual:false,data:null};
+        renderPerson();
+      }
+    }
+    async function doLookup(){
+      const sid=document.getElementById('sid').value.trim();
+      if(!/^\d{4,20}$/.test(sid)){showToast('學號 / 員編請輸入 4 到 20 位數字。','err');return;}
+      const btn=document.getElementById('lookupBtn');
+      busy(btn,true);
+      try{
+        const r=await api('lookupPerson',sid);
+        if(r.disabled){
+          ST.lookup={sid:'',done:false,found:false,manual:false,data:null};renderPerson();
+          showToast('此學號 / 員編在名冊中已停用，請洽管理學院院辦。','err');return;
+        }
+        ST.lookup={sid:sid,done:true,found:r.found,manual:!r.found,data:r};
+        renderPerson();
+      }catch(err){showToast(errMsg(err),'err');}
+      finally{busy(btn,false);}
+    }
+    /* 切換「使用名冊資料」與「手動填寫」 */
+    function useManual(on){
+      ST.lookup.manual=on;
+      if(on){['reporter','dept','phone'].forEach(id=>document.getElementById(id).value='');}
+      renderPerson();
+      if(on)document.getElementById('reporter').focus();
+    }
+    function renderPerson(){
+      const L=ST.lookup;
+      const roster=document.getElementById('rosterBox');
+      const manual=document.getElementById('manualBox');
+      const help=document.getElementById('sidHelp');
+      roster.classList.add('hidden');manual.classList.add('hidden');
+      if(!L.done){help.textContent='輸入後按「查詢」。名冊有資料時會自動帶入。';return;}
+      if(L.found&&!L.manual){
+        document.getElementById('rosterText').textContent=[L.data.nameMasked,L.data.dept,L.data.phoneMasked?'電話 '+L.data.phoneMasked:''].filter(Boolean).join(' · ');
+        help.textContent='為保護個資，畫面只顯示部分姓名與電話。';
+        roster.classList.remove('hidden');
+        return;
+      }
+      manual.classList.remove('hidden');
+      document.getElementById('backRosterBtn').classList.toggle('hidden',!L.found);
+      document.getElementById('manualHelp').textContent=L.found
+        ?'這裡填的資料只用在這張報修單，不會改動名冊。名冊資料有誤請洽院辦。'
+        :'名冊沒有這個學號，請填寫資料。送出後會自動建檔，下次可直接帶入。';
+      help.textContent=L.found?'已改為手動填寫。':'名冊查無資料。';
+    }
+
+    /* =========================================================
+       步驟 3：照片（前端壓縮成 JPG，最長邊 1600px）
+       ========================================================= */
+    function onPhotoPick(input){
+      const max=ST.boot.maxPhotos;
+      const files=Array.from(input.files||[]);
+      input.value='';                                  // 清空，讓同一張可以再選一次
+      const room=max-ST.photos.length;
+      if(room<=0){showToast('照片最多 '+max+' 張，請先移除再新增。','err');return;}
+      if(files.length>room)showToast('照片最多 '+max+' 張，只加入前 '+room+' 張。','info');
+      files.slice(0,room).forEach(f=>{
+        if(f.size>10*1024*1024){showToast('「'+f.name+'」超過 10 MB，請換一張。','err');return;}
+        compressImage(f).then(data=>{
+          if(ST.photos.length>=max)return;
+          ST.photos.push({data:data,name:f.name});renderPhotos();
+        }).catch(()=>{
+          // 多數 Windows 版 Chrome／Edge 無法解碼 HEIC，請使用者改用相容格式
+          showToast('「'+f.name+'」無法讀取。iPhone 照片請到「設定 > 相機 > 格式」改選「最相容」，或改傳螢幕截圖。','err');
+        });
+      });
+    }
+    function compressImage(file){
+      return new Promise((resolve,reject)=>{
+        const url=URL.createObjectURL(file);
+        const img=new Image();
+        img.onload=()=>{
+          const maxSide=1600;
+          let w=img.naturalWidth,h=img.naturalHeight;
+          const scale=Math.min(1,maxSide/Math.max(w,h));
+          w=Math.round(w*scale);h=Math.round(h*scale);
+          const c=document.createElement('canvas');c.width=w;c.height=h;
+          const ctx=c.getContext('2d');
+          ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);       // PNG 透明底改白底
+          ctx.drawImage(img,0,0,w,h);
+          URL.revokeObjectURL(url);
+          resolve(c.toDataURL('image/jpeg',0.8));
+        };
+        img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('decode'));};
+        img.src=url;
+      });
+    }
+    function renderPhotos(){
+      document.getElementById('photoGrid').innerHTML=ST.photos.map((p,i)=>
+        `<div class="photo-item"><img src="${p.data}" alt="照片 ${i+1}"><button type="button" class="btn-v2 danger-ghost" onclick="removePhoto(${i})">移除</button></div>`).join('');
+      document.getElementById('photoBtn').classList.toggle('hidden',ST.photos.length>=ST.boot.maxPhotos);
+    }
+    function removePhoto(i){ST.photos.splice(i,1);renderPhotos();}
+
+    /* =========================================================
+       送出：前端檢查 → 確認視窗 → 呼叫後端
+       ========================================================= */
+    function collect(){
+      const L=ST.lookup;
+      const g=document.getElementById('group').value;
+      return {
+        studentId:document.getElementById('sid').value.trim(),
+        useRoster:L.found&&!L.manual,
+        reporter:document.getElementById('reporter').value.trim(),
+        department:document.getElementById('dept').value.trim(),
+        phone:document.getElementById('phone').value.trim(),
+        locationId:g==='__OTHER_GROUP__'?ST.boot.otherId:document.getElementById('location').value,
+        otherLocation:document.getElementById('otherLocation').value.trim(),
+        itemId:document.getElementById('item').value,
+        description:document.getElementById('desc').value.trim(),
+        website:document.getElementById('website').value,
+        photos:ST.photos.map(p=>({data:p.data,name:p.name}))
+      };
+    }
+    /* 回傳第一個錯誤與要聚焦的欄位 */
+    function validate(d){
+      const L=ST.lookup;
+      if(!/^\d{4,20}$/.test(d.studentId))return['學號 / 員編請輸入 4 到 20 位數字。','sid'];
+      if(!L.done||L.sid!==d.studentId)return['請先按「查詢」確認學號 / 員編。','sid'];
+      if(!d.useRoster){
+        if(!d.reporter)return['請填寫姓名。','reporter'];
+        if(!d.department)return['請填寫系所 / 單位。','dept'];
+        if(!/^\d{4,15}$/.test(d.phone))return['聯絡電話請填手機或校內分機（4 到 15 位數字）。','phone'];
+      }
+      if(!document.getElementById('group').value)return['請選擇樓層 / 區域。','group'];
+      if(d.locationId===ST.boot.otherId){if(!d.otherLocation)return['請填寫報修地點。','otherLocation'];}
+      else if(!d.locationId)return['請選擇報修地點。','location'];
+      if(!d.itemId)return['請選擇報修項目。','item'];
+      if(d.description.length<5)return['請用至少 5 個字描述故障狀況。','desc'];
+      return null;
+    }
+    function openConfirm(){
+      const d=collect();
+      const bad=validate(d);
+      if(bad){showToast(bad[0],'err');const el=document.getElementById(bad[1]);if(el)el.focus();return;}
+      const sel=id=>{const s=document.getElementById(id);return s.options[s.selectedIndex]?s.options[s.selectedIndex].text:'';};
+      const who=d.useRoster?document.getElementById('rosterText').textContent:[d.reporter,d.department,d.phone].join(' · ');
+      const where=d.locationId===ST.boot.otherId?d.otherLocation:sel('group')+' '+sel('location');
+      document.getElementById('confirmBody').innerHTML=
+        '<dt>報修人</dt><dd>'+esc(d.studentId)+'　'+esc(who)+'</dd>'+
+        '<dt>地點</dt><dd>'+esc(where)+'</dd>'+
+        '<dt>項目</dt><dd>'+esc(sel('item'))+'</dd>'+
+        '<dt>故障說明</dt><dd>'+esc(d.description)+'</dd>'+
+        '<dt>照片</dt><dd>'+(d.photos.length?d.photos.length+' 張':'無')+'</dd>';
+      openOverlay('confirmModal');
+    }
+    async function doSubmit(btn){
+      if(ST.submitting)return;
+      ST.submitting=true;busy(btn,true);
+      try{
+        const r=await api('submitRepair',collect());
+        closeOverlay('confirmModal');
+        ST.lastId=r.ticketId;
+        document.getElementById('doneId').textContent='#'+r.ticketId;
+        document.getElementById('doneMsg').textContent=r.message;
+        openOverlay('doneModal');
+      }catch(err){
+        showToast(errMsg(err),'err');
+      }finally{
+        ST.submitting=false;busy(btn,false,'確認送出');
+      }
+    }
+    /* 清空表單（學號保留，方便同一人連續登記） */
+    function resetForm(){
+      ['otherLocation','desc'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('group').value='';onGroupChange();
+      document.getElementById('item').value='';
+      updateCounter(document.getElementById('desc'),'descCount');
+      updateCounter(document.getElementById('otherLocation'),'otherCount');
+      ST.photos=[];renderPhotos();
+      window.scrollTo(0,0);
+    }
+    function goQueryAfterSubmit(){
+      resetForm();
+      document.getElementById('qKeyword').value='#'+ST.lastId;
+      switchTab('query');
+      document.getElementById('qLast4').focus();
+    }
+
+    /* =========================================================
+       查詢進度
+       ========================================================= */
+    async function doQuery(){
+      const keyword=document.getElementById('qKeyword').value.trim();
+      const last4=document.getElementById('qLast4').value.trim();
+      if(!keyword){showToast('請輸入學號 / 員編或案件編號。','err');return;}
+      if(!/^\d{4}$/.test(last4)){showToast('請輸入電話後四碼（4 位數字）。','err');return;}
+      const btn=document.getElementById('queryBtn');
+      const box=document.getElementById('queryResult');
+      busy(btn,true);
+      box.innerHTML='<div class="loading"><div class="spinner rounded-circle"></div><p>查詢中...</p></div>';
+      try{
+        const list=await api('queryMyRepairs',{keyword:keyword,phoneLast4:last4});
+        ST.lastResults=list;
+        if(!list.length){
+          box.innerHTML='<div class="empty"><div class="ico">'+licon('inbox','licon-lg')+'</div><h3>查無報修紀錄</h3><p>請確認學號或案件編號，以及報修時填的電話後四碼。</p></div>';
+          return;
+        }
+        box.innerHTML='<div class="table-wrap"><table class="table-v2"><thead><tr><th>案件</th><th>地點 / 項目</th><th>狀態</th><th>最新說明</th><th>操作</th></tr></thead><tbody>'+
+          list.map((c,i)=>`<tr>
+            <td><b>#${esc(c.id)}</b><span class="sub">${esc(c.time.slice(0,16))}</span></td>
+            <td><b>${esc(c.location)}</b><span class="sub">${esc(c.group)} · ${esc(c.item)}</span></td>
+            <td>${statusTag(c.status)}</td>
+            <td><span class="clip">${esc(c.publicNote||'--')}</span><span class="sub">更新於 ${esc((c.updated||'').slice(0,16))}</span></td>
+            <td><button class="btn-v2 ghost" onclick="openCase(${i})">查看進度</button></td>
+          </tr>`).join('')+
+          '</tbody></table></div><div class="more">共 '+list.length+' 筆，最多顯示最近 30 筆。</div>';
+      }catch(err){
+        box.innerHTML='';showToast(errMsg(err),'err');
+      }finally{busy(btn,false);}
+    }
+    function openCase(i){
+      const c=ST.lastResults[i];if(!c)return;
+      document.getElementById('caseTitle').textContent='#'+c.id+' '+c.location;
+      document.getElementById('caseBody').innerHTML=
+        '<dl class="kv">'+
+          '<dt>狀態</dt><dd>'+statusTag(c.status)+'</dd>'+
+          '<dt>報修時間</dt><dd>'+esc(c.time)+'</dd>'+
+          '<dt>地點</dt><dd>'+esc(c.group)+' '+esc(c.location)+'</dd>'+
+          '<dt>項目</dt><dd>'+esc(c.item)+'</dd>'+
+          '<dt>故障說明</dt><dd>'+esc(c.description)+'</dd>'+
+          '<dt>照片</dt><dd>'+(c.photoCount?c.photoCount+' 張（院辦可檢視）':'無')+'</dd>'+
+          (c.closedAt?'<dt>結案時間</dt><dd>'+esc(c.closedAt)+'</dd>':'')+
+        '</dl>'+
+        '<p class="sub-title">處理進度</p>'+
+        '<div class="tl">'+(c.progress.length?c.progress.slice().reverse().map(p=>
+          `<div class="tl-item"><div class="meta">${statusTag(p.status)}<span>${esc(p.time.slice(0,16))}</span></div>${p.note?'<p>'+esc(p.note)+'</p>':''}</div>`).join('')
+          :'<div class="tl-item"><p class="field-help">尚無進度紀錄。</p></div>')+'</div>'+
+        '<p class="field-help" style="margin-top:12px">報修後無法自行修改或取消。需要補充或撤回請洽院辦，並告知案件編號。</p>';
+      openOverlay('caseDrawer');
+    }
+
+    init();
+  </script>
+</body>
+</html>

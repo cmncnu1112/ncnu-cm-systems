@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <!-- Apps Script 網頁應用程式需要 target="_top"，連結才不會開在 iframe 裡 -->
+<meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- GitHub Pages 版：先載入後端網址設定，再載入轉接頭（讓 google.script.run 改走 fetch 呼叫 GAS 的 doPost） -->
+  <script src="./config.js?v=1"></script>
+  <script src="../shared/gas-shim.js?v=3"></script>
+  <title>管理學院 失物招領</title>
+  <!-- 英數字字型 IBM Plex Sans；中文自動落到微軟正黑體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+  <style>
+    /* =========================================================
+       失物招領前台 Index.html  V1.0.0
+       免登入；只顯示管理員已發布的「待認領」物品
+       版面依「管院行政系統 介面模板交接手冊」，樣式取自起手模板 V2.5.6
+       ========================================================= */
+    :root{
+      --navy:#1e3a8a;--navy-dark:#172b66;--navy-press:#0f1d45;--navy-soft:#e8eefc;--amber:#d97706;
+      --bg:#f4f4f4;--layer:#ffffff;--field:#f4f4f4;--layer-hover:#e8e8e8;--layer-active:#e0e0e0;
+      --border-subtle:#e0e0e0;--border-strong:#8d8d8d;--disabled:#c6c6c6;--placeholder:#a8a8a8;
+      --ink:#161616;--muted:#525252;--helper:#6f6f6f;--focus:var(--navy);
+      --ok-bg:#defbe6;--ok:#0e6027;--out-bg:#fff1f1;--out:#a2191f;--warn-bg:#fcf4d6;--warn:#8e6a00;--mute-bg:#e0e0e0;--mute:#161616;
+      --toast-ok:#059669;--toast-err:#e11d48;--toast-info:#262626;
+    }
+
+    /* ===== 基礎 ===== */
+    *{box-sizing:border-box;margin:0;padding:0}
+    body,button,input,select,textarea{font-family:"IBM Plex Sans","Microsoft JhengHei","微軟正黑體",ui-sans-serif,system-ui,sans-serif;letter-spacing:.16px}
+    body{background:var(--bg);color:var(--ink);font-size:14px;min-height:100vh}
+    .rounded-circle{border-radius:50%}
+    [hidden]{display:none!important}
+
+    /* ===== Lucide 圖示 ===== */
+    .licon{width:1.15em;height:1.15em;display:inline-block;vertical-align:-.2em;flex-shrink:0;stroke-width:2}
+    .licon-sm{width:1em;height:1em}.licon-lg{width:1.5em;height:1.5em}.licon-xl{width:2.5rem;height:2.5rem}
+
+    /* ===== 頂欄 ===== */
+    .topbar{position:sticky;top:0;z-index:30;height:48px;background:var(--navy);color:#fff;display:flex;align-items:center;gap:16px;padding:0 16px}
+    .topbar h1{font-size:14px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .topbar .btn-top{white-space:nowrap;flex-shrink:0}
+    .topbar .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .topbar .updated{font-size:11px;color:#c6c6c6;display:none}
+    .topbar .btn-top{height:32px;padding:0 12px;border:0;background:#fff;color:var(--ink);font-size:12px;font-weight:900;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+    @media (min-width:640px){.topbar{padding:0 24px}.topbar h1{font-size:16px}.topbar .updated{display:inline}}
+
+    /* ===== 外框、側欄、主區 ===== */
+    .shell{display:flex;flex-direction:column;align-items:flex-start;width:100%}
+    @media (min-width:768px){.shell{flex-direction:row}}
+    .nav-v2{width:100%;background:var(--layer);padding:8px 0;display:flex;overflow-x:auto;border-bottom:1px solid var(--border-subtle)}
+    .nav-btn{flex:0 0 auto;height:40px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:none;border:0;color:var(--muted);font-size:14px;text-align:left;cursor:pointer;white-space:nowrap}
+    .nav-btn:hover{background:var(--layer-hover);color:var(--ink)}
+    .nav-btn.on{color:var(--ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--navy)}
+    .nav-btn .num{font-size:12px;color:var(--helper);font-weight:400}
+    @media (min-width:768px){
+      .nav-v2{width:208px;flex-shrink:0;flex-direction:column;position:sticky;top:48px;align-self:flex-start;min-height:calc(100vh - 48px);overflow:visible;border-bottom:0}
+      .nav-btn{width:100%}
+      .nav-btn.on{background:var(--layer-active);box-shadow:inset 3px 0 0 var(--navy)}
+    }
+    .main{flex:1;min-width:0;width:100%;padding:16px;display:flex;flex-direction:column;gap:16px}
+    @media (min-width:640px){.main{padding:24px}}
+
+    /* ===== KPI 磚（前台三格） ===== */
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bg)}
+    .kpi{background:var(--layer);padding:16px}
+    .kpi small{display:block;font-size:12px;letter-spacing:.32px;color:var(--muted)}
+    .kpi b{display:block;font-size:28px;font-weight:600;line-height:1.4;padding-top:2px;margin-top:2px;color:var(--navy);font-variant-numeric:tabular-nums}
+
+    /* ===== 認領方式說明列：資訊性質，用淡藍底，琥珀橘保留給真正需要注意的事 ===== */
+    .info-bar{background:var(--navy-soft);color:var(--navy);padding:12px 16px;display:flex;gap:10px;align-items:flex-start;line-height:1.7}
+    .info-bar button.link{background:none;border:0;color:var(--navy);text-decoration:underline;cursor:pointer;font-size:14px}
+
+    /* ===== 面板與工具列 ===== */
+    .panel-v2{background:var(--layer)}
+    .toolbar-v2{min-height:48px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 16px}
+    .toolbar-v2 h2{font-size:20px;font-weight:400}
+    .toolbar-v2 .sp{flex:1}
+    .panel-body{padding:4px 16px 20px;max-width:960px} /* 說明頁以閱讀為主，加最大寬度 */
+    .panel-body li,.panel-body p{line-height:1.8}
+    .panel-body ol{padding-left:22px}
+    .panel-body h3{font-size:14px;font-weight:600;margin:16px 0 4px}
+
+    /* ===== 輸入框 ===== */
+    input[type=search],select{border:0;border-bottom:1px solid var(--border-strong);border-radius:0;background:var(--field);color:var(--ink);font-size:14px;padding:0 12px}
+    input:focus,select:focus{outline:2px solid var(--focus);outline-offset:-2px}
+    input::placeholder{color:var(--placeholder)}
+    .field-v2{height:32px;min-width:200px}
+    .field-v2.narrow{min-width:120px}
+    @media (max-width:639px){.toolbar-v2 .field-v2{flex:1 1 100%}}
+
+    /* ===== 按鈕 ===== */
+    .btn-v2{height:32px;padding:0 16px;border:0;border-radius:0;font-size:14px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;cursor:pointer;transition:background .07s}
+    .btn-v2.pri{background:var(--navy);color:#fff}.btn-v2.pri:hover{background:var(--navy-dark)}.btn-v2.pri:active{background:var(--navy-press)}
+    .btn-v2.ghost{background:transparent;color:var(--navy)}.btn-v2.ghost:hover{background:var(--layer-hover)}
+    button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;box-shadow:inset 0 0 0 3px #fff}
+
+    /* ===== 標籤 ===== */
+    .tag-v2{display:inline-block;height:24px;line-height:24px;padding:0 8px;font-size:12px;white-space:nowrap}
+    .tag-v2.ok{background:var(--ok-bg);color:var(--ok)}.tag-v2.out{background:var(--out-bg);color:var(--out)}
+    .tag-v2.warn{background:var(--warn-bg);color:var(--warn)}.tag-v2.mute{background:var(--mute-bg);color:var(--mute)}
+    .chip-v2{display:inline-block;height:24px;line-height:24px;padding:0 8px;font-size:12px;white-space:nowrap}
+    .chip-v2.key{background:var(--navy-soft);color:var(--navy)}.chip-v2.eq{background:var(--layer-active);color:var(--ink)}
+
+    /* ===== 物品卡片：灰底上的白色層，無外框、無陰影、無圓角 ===== */
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1px;background:var(--bg);padding:0}
+    .card{background:var(--layer);border:0;text-align:left;cursor:pointer;display:flex;flex-direction:column;color:var(--ink);font-size:14px}
+    .card:hover{background:var(--layer-hover)}
+    .card .ph{aspect-ratio:4/3;background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--helper);overflow:hidden;font-size:12px;flex-direction:column;gap:6px}
+    .card .ph img{width:100%;height:100%;object-fit:cover;display:block}
+    .card .cb{padding:12px 16px 16px;display:flex;flex-direction:column;gap:6px}
+    .card .no{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+    .card .tt{font-weight:600;font-size:16px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .card .meta{font-size:12px;color:var(--muted);line-height:1.6}
+    .card .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+    .more-bar{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px 16px;font-size:12px;color:var(--helper)}
+
+    /* ===== 檢視抽屜 ===== */
+    .overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,23,.4);backdrop-filter:blur(4px)}
+    .overlay.open{display:flex}
+    .drawer-v2{width:100%;max-width:576px;max-height:90vh;background:var(--layer);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.25)}
+    @media (min-width:1024px){
+      .overlay.side{padding:0;justify-content:flex-end;align-items:stretch;background:transparent;backdrop-filter:none}
+      .overlay.side .drawer-v2{width:400px;max-width:400px;max-height:none;height:100%;box-shadow:-8px 0 24px rgba(15,23,42,.10)}
+    }
+    .drawer-v2 header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;background:var(--navy);color:#fff}
+    .drawer-v2 header small{font-size:12px;opacity:.75}
+    .drawer-v2 header h3{font-size:20px;font-weight:400;margin-top:2px;word-break:break-all}
+    .drawer-close{width:32px;height:32px;border:0;background:transparent;color:#fff;cursor:pointer;flex-shrink:0;font-size:16px}
+    .drawer-close:hover{background:rgba(255,255,255,.12)}
+    .drawer-v2 .body{flex:1;overflow-y:auto;padding:16px 20px}
+    .drawer-v2 .foot{display:grid;gap:10px;padding:16px 20px;background:var(--layer)}
+    .drawer-v2 .foot .btn-v2{height:48px;width:100%;justify-content:flex-start}
+    /* 手機防止抽屜左右滑動、背後頁面跟著捲動 */
+    .drawer-v2 .body{overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y}
+    .overlay{overscroll-behavior:contain;touch-action:none}
+    body.no-scroll{overflow:hidden}
+    /* iOS 輸入框字級小於 16px 時點進去會自動放大整頁，手機改用 16px */
+    @media (max-width:1023px){input[type=search],select{font-size:16px}}
+    .photo-box{background:var(--bg);aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--helper);font-size:12px;flex-direction:column;gap:8px}
+    .photo-box img{width:100%;height:100%;object-fit:contain;display:block}
+    .kv{display:grid;grid-template-columns:88px 1fr;gap:8px 12px;margin-top:16px}
+    .kv dt{font-size:12px;letter-spacing:.32px;color:var(--muted);padding-top:2px}
+    .kv dd{word-break:break-word}
+    .sec{margin-top:20px;font-size:12px;letter-spacing:.32px;color:var(--muted)}
+    .pre{white-space:pre-wrap;word-break:break-word;margin-top:6px;line-height:1.7}
+    .how{background:var(--navy-soft);color:var(--navy);padding:12px;margin-top:20px;line-height:1.7;font-size:14px}
+
+    /* ===== 提示訊息、空狀態、讀取中 ===== */
+    .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;max-width:90vw;padding:12px 16px;font-size:12px;font-weight:700;color:#fff;display:none;box-shadow:0 10px 24px rgba(0,0,0,.2)}
+    .toast.show{display:block}.toast.ok{background:var(--toast-ok)}.toast.err{background:var(--toast-err)}.toast.info{background:var(--toast-info)}
+    .empty{padding:64px 16px;text-align:center;background:var(--layer)}
+    .empty .ico{width:56px;height:56px;margin:0 auto;background:var(--bg);color:var(--helper);display:flex;align-items:center;justify-content:center}
+    .empty h3{font-size:14px;font-weight:900;margin-top:16px}
+    .empty p{font-size:12px;color:var(--helper);margin-top:4px}
+    .loading{padding:64px 16px;text-align:center;color:var(--helper);font-size:12px;background:var(--layer)}
+    .spinner{width:36px;height:36px;margin:0 auto 12px;border:3px solid var(--layer-active);border-top-color:var(--navy);animation:spin .8s linear infinite}
+    .spinner.sm{width:20px;height:20px;margin:0;border-width:2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <!-- ===== 頂欄 ===== -->
+  <header class="topbar">
+    <h1>管理學院 失物招領</h1>
+    <div class="right">
+      <span class="updated" id="lastUpdated">尚未更新</span>
+      <button class="btn-top" onclick="load(false,true)"><span data-icon="refresh-cw"></span>重新整理</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="nav-v2" id="nav"></nav>
+    <main class="main" id="main">
+      <div class="loading"><div class="spinner rounded-circle"></div>讀取資料中…</div>
+    </main>
+  </div>
+
+  <!-- ===== 物品檢視抽屜 ===== -->
+  <div class="overlay side" id="detailDrawer" onclick="if(event.target===this)closeDetail()">
+    <div class="drawer-v2" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+      <header>
+        <div><small id="dEyebrow">ITEM</small><h3 id="dTitle">物品資料</h3></div>
+        <button class="drawer-close" aria-label="關閉" onclick="closeDetail()"><span data-icon="x"></span></button>
+      </header>
+      <div class="body" id="dBody"></div>
+      <div class="foot"><button class="btn-v2 ghost" onclick="closeDetail()">關閉</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ===== Lucide 圖示（https://lucide.dev，ISC 授權，v0.469.0），SVG 內嵌不需外部 CDN ===== */
+    const LUCIDE={
+      'refresh-cw':'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" />',
+      'plus':'<path d="M5 12h14" /><path d="M12 5v14" />',
+      'x':'<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
+      'inbox':'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />',
+      'package':'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /><path d="M12 22V12" /><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7" /><path d="m7.5 4.27 9 5.15" />',
+      'calendar':'<path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" />',
+      'triangle-alert':'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" />',
+      'search':'<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />',
+      'printer':'<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6" /><rect x="6" y="14" width="12" height="8" rx="1" />',
+      'image':'<rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />',
+      'check':'<path d="M20 6 9 17l-5-5" />',
+      'eye':'<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" />',
+      'map-pin':'<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" />',
+      'clock':'<circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />',
+      'lock':'<rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />',
+      'log-out':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" />',
+      'archive':'<rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" />',
+      'pencil':'<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" />',
+      'info':'<circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />',
+      'settings':'<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" />',
+      'ban':'<circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" />',
+      'file-text':'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" />',
+      'users':'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />',
+      'list-checks':'<path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" />',
+      'hand-helping':'<path d="M11 12h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 14" /><path d="m7 18 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9" /><path d="m2 13 6 6" />',
+      'camera':'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />',
+      'history':'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" />',
+      'trash-2':'<path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />',
+      'circle-check':'<circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" />'
+    };
+    function licon(name,cls){
+      const body=LUCIDE[name];
+      if(!body)return '';
+      return '<svg class="licon'+(cls?' '+cls:'')+'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+body+'</svg>';
+    }
+    function hydrateIcons(root=document){
+      root.querySelectorAll('[data-icon]').forEach(el=>{el.outerHTML=licon(el.dataset.icon);});
+    }
+
+    /* =========================================================
+       一、狀態與工具
+       ========================================================= */
+    const S={
+      data:null,      // getPublicData 回傳的資料
+      tab:'list',     // list 招領中物品；rules 認領須知
+      q:'',cat:'',sort:'new',
+      limit:24,       // 卡片一次畫 24 張，底部「顯示更多」
+      photos:{},      // 已讀取的照片：id → dataUrl（本頁快取）
+      openId:''
+    };
+    const PAGE=24;
+
+    function esc(s){
+      return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function showToast(msg,type='info'){
+      const t=document.getElementById('toast');
+      t.textContent=msg;t.className='toast show '+type;
+      clearTimeout(showToast._timer);
+      showToast._timer=setTimeout(()=>t.classList.remove('show'),3500);
+    }
+    /** 呼叫 Code.gs，回傳 Promise */
+    function call(fn,...args){
+      return new Promise((resolve,reject)=>{
+        google.script.run
+          .withSuccessHandler(r=>{if(r&&r.ok)resolve(r.data);else reject(new Error(r&&r.message?r.message:'未知錯誤，請重新整理。'));})
+          .withFailureHandler(err=>reject(new Error('連線失敗，請檢查網路後再試。')))
+          [fn](...args);
+      });
+    }
+    /** 期限標籤：已逾期紅色、30 天內黃色、其他只顯示文字 */
+    function dueTag(o){
+      if(o.days_left<0)return '<span class="tag-v2 out">已過認領期限，請洽院辦</span>';
+      if(o.days_left<=S.data.soonDays)return `<span class="tag-v2 warn">剩 ${o.days_left} 天</span>`;
+      return '';
+    }
+
+    /* =========================================================
+       二、讀取資料
+       ========================================================= */
+    async function load(silent,manual){
+      try{
+        S.data=await call('getPublicData');
+        document.getElementById('lastUpdated').textContent='最後更新 '+S.data.updatedAt.slice(11,19);
+        renderNav();
+        // 背景更新時只重畫卡片，保留搜尋框內容
+        if(!document.getElementById('toolbar'))renderMain();else renderGrid();
+        if(manual)showToast('資料已更新。','info');
+      }catch(e){
+        if(!silent){
+          showToast(e.message,'err');
+          if(!S.data)document.getElementById('main').innerHTML=`<div class="empty"><div class="ico">${licon('triangle-alert','licon-lg')}</div><h3>資料讀取失敗</h3><p>${esc(e.message)}</p></div>`;
+        }
+      }
+    }
+
+    /* =========================================================
+       三、畫面
+       ========================================================= */
+    function renderNav(){
+      const n=S.data?S.data.items.length:0;
+      document.getElementById('nav').innerHTML=
+        `<button class="nav-btn${S.tab==='list'?' on':''}" onclick="switchTab('list')"><span>招領中物品</span><span class="num">${n}</span></button>`+
+        `<button class="nav-btn${S.tab==='rules'?' on':''}" onclick="switchTab('rules')"><span>認領須知</span></button>`;
+    }
+    function switchTab(id){S.tab=id;renderNav();renderMain();}
+
+    function renderMain(){
+      const main=document.getElementById('main');
+      if(S.tab==='rules'){main.innerHTML=rulesHtml();hydrateIcons(main);return;}
+      const items=S.data.items;
+      const today=new Date(),weekAgo=new Date(today.getTime()-7*86400000);
+      const weekStr=weekAgo.toLocaleDateString('sv-SE',{timeZone:'Asia/Taipei'}); // sv-SE 會輸出 YYYY-MM-DD
+      const newThisWeek=items.filter(o=>String(o.published_at).slice(0,10)>=weekStr).length;
+      const soon=items.filter(o=>o.days_left>=0&&o.days_left<=S.data.soonDays).length;
+      main.innerHTML=`
+        <section class="kpis">
+          <div class="kpi"><small>招領中</small><b>${items.length}</b></div>
+          <div class="kpi"><small>近 7 天新公告</small><b>${newThisWeek}</b></div>
+          <div class="kpi"><small>${S.data.soonDays} 天內到期</small><b>${soon}</b></div>
+        </section>
+        <div class="info-bar">${licon('info')}<span>看到自己的物品嗎？請攜帶學生證或身分證件，到<b>管理學院院辦</b>向值班人員說明物品特徵，核對相符後即可領取。認領期限為拾獲日期加 ${S.data.claimMonths} 個月。<button class="link" onclick="switchTab('rules')">查看認領須知</button></span></div>
+        <section class="panel-v2">
+          <div class="toolbar-v2" id="toolbar">
+            <h2>招領中物品</h2><span class="sp"></span>
+            <input class="field-v2" type="search" placeholder="搜尋編號、名稱、地點、描述" value="${esc(S.q)}" oninput="onSearch(this.value)">
+            <select class="field-v2 narrow" onchange="S.cat=this.value;S.limit=PAGE;renderGrid()">
+              <option value="">全部分類</option>${S.data.categories.map(c=>`<option${c===S.cat?' selected':''}>${esc(c)}</option>`).join('')}
+            </select>
+            <select class="field-v2 narrow" onchange="S.sort=this.value;S.limit=PAGE;renderGrid()">
+              <option value="new"${S.sort==='new'?' selected':''}>最新公告</option>
+              <option value="due"${S.sort==='due'?' selected':''}>即將到期</option>
+              <option value="found"${S.sort==='found'?' selected':''}>拾獲日期</option>
+            </select>
+          </div>
+        </section>
+        <div id="gridBox"></div>`;
+      renderGrid();
+    }
+
+    let searchTimer=null;
+    function onSearch(v){
+      clearTimeout(searchTimer);
+      searchTimer=setTimeout(()=>{S.q=v.trim().toLowerCase();S.limit=PAGE;renderGrid();},200);
+    }
+
+    function filtered(){
+      let list=S.data.items;
+      if(S.cat)list=list.filter(o=>o.category===S.cat);
+      if(S.q)list=list.filter(o=>[o.case_label,o.title,o.category,o.location,o.public_desc].some(v=>String(v||'').toLowerCase().includes(S.q)));
+      list=[...list];
+      if(S.sort==='due')list.sort((a,b)=>a.days_left-b.days_left);
+      else if(S.sort==='found')list.sort((a,b)=>String(b.found_date).localeCompare(String(a.found_date)));
+      return list; // 預設依發布時間新到舊（伺服器已排序）
+    }
+
+    function renderGrid(){
+      const box=document.getElementById('gridBox');
+      if(!box)return;
+      const list=filtered();
+      if(!list.length){
+        const f=S.q||S.cat;
+        box.innerHTML=`<div class="empty"><div class="ico">${licon('inbox','licon-lg')}</div>
+          <h3>${f?'找不到符合的物品':'目前沒有招領中的物品'}</h3>
+          <p>${f?'請調整搜尋文字或分類。':'院辦登記並發布後會出現在這裡。'}</p></div>`;
+        return;
+      }
+      const shown=list.slice(0,S.limit);
+      hydrateStoredThumbs(shown);
+      box.innerHTML=`<div class="grid">${shown.map(cardHtml).join('')}</div>
+        ${list.length>S.limit?`<div class="more-bar">已顯示 ${shown.length} / ${list.length}<button class="btn-v2 ghost" onclick="S.limit+=PAGE;renderGrid()">顯示更多</button></div>`:`<div class="more-bar">共 ${list.length} 件</div>`}`;
+      observePhotos(box);
+    }
+
+    function cardHtml(o){
+      const ph=o.has_photo
+        ?(S.photos[o.id]?`<img src="${S.photos[o.id]}" alt="${esc(o.title)}">`:`<div class="spinner sm rounded-circle"></div>`)
+        :`${licon('package','licon-xl')}<span>沒有照片</span>`;
+      return `<button class="card" onclick="openDetail('${o.id}')" aria-label="${esc(o.title)}，編號 ${esc(o.case_label)}">
+        <div class="ph" ${o.has_photo&&!S.photos[o.id]?`data-photo="${o.id}"`:''}>${ph}</div>
+        <div class="cb">
+          <span class="no">No. ${esc(o.case_label)}</span>
+          <span class="tt">${esc(o.title)}</span>
+          <span class="row"><span class="chip-v2 eq">${esc(o.category)}</span>${dueTag(o)}</span>
+          <span class="meta">${licon('map-pin','licon-sm')} ${esc(o.location)}<br>${licon('calendar','licon-sm')} 拾獲 ${esc(o.found_date)}　期限 ${esc(o.deadline)}</span>
+        </div></button>`;
+    }
+
+    /* =========================================================
+       四、照片載入（縮圖）
+       1. 卡片捲進畫面前 300px 才排入佇列
+       2. 有縮圖的物品：最多 6 張合併成一次呼叫，同時 3 批
+       3. 舊物品沒有縮圖（V1.1 以前上傳）：伺服器不會在批次裡回傳大圖，
+          改走「單張讀大圖」佇列，同時 3 張；讀到後在瀏覽器縮小成縮圖再存起來
+       4. 縮圖存進瀏覽器 localStorage，下次開啟直接顯示；換照片時 photo_v 改變，舊縮圖自然失效
+       ========================================================= */
+    const THUMB_BATCH=6, THUMB_PARALLEL=3, FULL_PARALLEL=3, THUMB_STORE_MAX=150;
+    const photoQueue=[];let photoActive=0;const photoPending=new Set();let flushTimer=null;
+    const fullQueue=[];let fullActive=0;   // 沒有縮圖的舊照片，單張讀取
+    let io=null;
+
+    /** 瀏覽器端縮圖快取：讀 */
+    function storedThumb(o){
+      try{return localStorage.getItem('lf_th_'+o.id+'_'+o.photo_v)||'';}catch(e){return '';}
+    }
+    /** 瀏覽器端縮圖快取：寫（超過 150 張時刪最舊的；空間不足就放棄，不影響顯示） */
+    function storeThumb(o,url){
+      try{
+        const key='lf_th_'+o.id+'_'+o.photo_v;
+        let idx=JSON.parse(localStorage.getItem('lf_th_index')||'[]').filter(k=>k!==key);
+        idx.push(key);
+        while(idx.length>THUMB_STORE_MAX){localStorage.removeItem(idx.shift());}
+        localStorage.setItem(key,url);
+        localStorage.setItem('lf_th_index',JSON.stringify(idx));
+      }catch(e){}
+    }
+    /** 畫卡片前先把瀏覽器裡已有的縮圖填進 S.photos，畫出來就直接有圖 */
+    function hydrateStoredThumbs(list){
+      list.forEach(o=>{if(o.has_photo&&!S.photos[o.id]){const u=storedThumb(o);if(u)S.photos[o.id]=u;}});
+    }
+
+    function observePhotos(root){
+      if(!('IntersectionObserver' in window)){root.querySelectorAll('[data-photo]').forEach(el=>queuePhoto(el.dataset.photo));return;}
+      if(!io)io=new IntersectionObserver(entries=>{
+        entries.forEach(en=>{if(en.isIntersecting){io.unobserve(en.target);queuePhoto(en.target.dataset.photo);}});
+      },{rootMargin:'300px'});
+      root.querySelectorAll('[data-photo]').forEach(el=>io.observe(el));
+    }
+    function queuePhoto(id){
+      if(!id||S.photos[id]||photoPending.has(id))return;
+      photoPending.add(id);photoQueue.push(id);
+      // 稍等一下再送，讓同一批捲進畫面的卡片合併成一次呼叫
+      if(!flushTimer)flushTimer=setTimeout(()=>{flushTimer=null;pumpPhotos();},40);
+    }
+    /** 把縮圖放到畫面上所有等待中的位置（卡片與開著的檢視抽屜） */
+    function placeThumb(id,url){
+      document.querySelectorAll(`[data-photo="${id}"]`).forEach(el=>{el.innerHTML=`<img src="${url}" alt="">`;el.removeAttribute('data-photo');});
+      if(S.openId===id){const b=document.getElementById('dPhoto');if(b&&!b.dataset.full)b.innerHTML=`<img src="${url}" alt="">`;}
+    }
+    function pumpPhotos(){
+      while(photoActive<THUMB_PARALLEL&&photoQueue.length){
+        const ids=photoQueue.splice(0,THUMB_BATCH);photoActive++;
+        call('getPublicThumbs',ids).then(map=>{
+          ids.forEach(id=>{
+            const url=map[id];
+            if(url){
+              S.photos[id]=url;
+              const o=S.data.items.find(x=>x.id===id);
+              if(o)storeThumb(o,url);
+              placeThumb(id,url);
+              photoPending.delete(id);
+            }else{
+              fullQueue.push(id);   // 沒有縮圖或讀取失敗：改用單張讀大圖
+            }
+          });
+        }).catch(()=>{
+          ids.forEach(id=>fullQueue.push(id));   // 整批失敗也不放棄，逐張重試
+        }).finally(()=>{photoActive--;pumpPhotos();pumpFull();});
+      }
+    }
+
+    /** 單張讀大圖（舊照片或批次失敗時使用），讀到後縮小成縮圖存起來 */
+    function pumpFull(){
+      while(fullActive<FULL_PARALLEL&&fullQueue.length){
+        const id=fullQueue.shift();fullActive++;
+        call('getPublicPhoto',id).then(r=>shrink(r.dataUrl,560,0.72)).then(url=>{
+          S.photos[id]=url;
+          const o=S.data.items.find(x=>x.id===id);
+          if(o)storeThumb(o,url);
+          placeThumb(id,url);
+        }).catch(()=>{
+          document.querySelectorAll(`[data-photo="${id}"]`).forEach(el=>{el.innerHTML=licon('image','licon-lg')+'<span>照片無法顯示</span>';});
+        }).finally(()=>{fullActive--;photoPending.delete(id);pumpFull();});
+      }
+    }
+
+    /** 在瀏覽器把大圖縮成長邊 maxSide 的 JPEG；失敗就沿用原圖 */
+    function shrink(dataUrl,maxSide,quality){
+      return new Promise(resolve=>{
+        const img=new Image();
+        img.onload=()=>{
+          try{
+            const r=Math.min(1,maxSide/Math.max(img.width,img.height));
+            const c=document.createElement('canvas');
+            c.width=Math.round(img.width*r);c.height=Math.round(img.height*r);
+            const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);
+            ctx.drawImage(img,0,0,c.width,c.height);
+            resolve(c.toDataURL('image/jpeg',quality));
+          }catch(e){resolve(dataUrl);}
+        };
+        img.onerror=()=>resolve(dataUrl);
+        img.src=dataUrl;
+      });
+    }
+
+    /* =========================================================
+       五、物品檢視
+       ========================================================= */
+    function openDetail(id){
+      const o=S.data.items.find(x=>x.id===id);
+      if(!o)return;
+      S.openId=id;
+      document.getElementById('dEyebrow').textContent='ITEM No. '+o.case_label;
+      document.getElementById('dTitle').textContent=o.title;
+      // 有縮圖就先顯示縮圖，接著背景讀大圖再替換
+      const ph=o.has_photo?(S.photos[id]?`<img src="${S.photos[id]}" alt="${esc(o.title)}">`:'<div class="spinner rounded-circle"></div>讀取照片中…'):licon('package','licon-xl')+'沒有照片';
+      document.getElementById('dBody').innerHTML=`
+        <div class="photo-box" id="dPhoto">${ph}</div>
+        <div style="margin-top:12px;display:flex;gap:4px;flex-wrap:wrap"><span class="tag-v2 ok">待認領</span>${dueTag(o)}</div>
+        <dl class="kv">
+          <dt>流水編號</dt><dd>No. ${esc(o.case_label)}</dd>
+          <dt>分類</dt><dd>${esc(o.category)}</dd>
+          <dt>拾獲日期</dt><dd>${esc(o.found_date)}</dd>
+          <dt>拾獲地點</dt><dd>${esc(o.location)}</dd>
+          <dt>認領期限</dt><dd>${esc(o.deadline)}</dd>
+        </dl>
+        <div class="sec">物品描述</div>
+        <div class="pre">${esc(o.public_desc)}</div>
+        <div class="how">${licon('info')} 認領時請告訴院辦這是編號 <b>No. ${esc(o.case_label)}</b> 的物品，並說出只有失主知道的特徵（例如內容物、刻字、貼紙），核對相符後即可領回。</div>`;
+      document.getElementById('detailDrawer').classList.add('open');
+      document.body.classList.add('no-scroll'); // 鎖住背後頁面
+      if(o.has_photo){
+        if(!S.photos[id])queuePhoto(id);
+        call('getPublicPhoto',id).then(r=>{
+          if(S.openId!==id)return;
+          const b=document.getElementById('dPhoto');
+          if(b){b.dataset.full='1';b.innerHTML=`<img src="${r.dataUrl}" alt="${esc(o.title)}">`;}
+        }).catch(()=>{});
+      }
+    }
+    function closeDetail(){S.openId='';document.getElementById('detailDrawer').classList.remove('open');document.body.classList.remove('no-scroll');}
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
+
+    function rulesHtml(){
+      return `<section class="panel-v2"><div class="toolbar-v2" id="toolbar"><h2>認領須知</h2></div><div class="panel-body">
+        <h3>這個網站提供什麼</h3>
+        <p>這裡公告管理學院院辦登記的拾獲物，方便失主查詢。本系統只受理「失主認領」，不開放遺失通報。</p>
+        <h3>如何認領</h3>
+        <ol>
+          <li>在「招領中物品」找到自己的物品，記下五碼編號。</li>
+          <li>攜帶學生證、教職員證或身分證件，到管理學院院辦找值班人員。</li>
+          <li>說出物品特徵供核對，相符後當場領回。</li>
+        </ol>
+        <h3>認領期限</h3>
+        <p>拾獲日期加 ${S.data?S.data.claimMonths:6} 個月，例如 11 月 10 日拾獲，可認領到隔年 5 月 10 日。逾期未認領的物品，院辦會依規定回收或另作處理。</p>
+        <h3>不登記的物品</h3>
+        <p>便條紙、髮圈、橡皮筋等零散低價物品不登記、不公告。</p>
+      </div></section>`;
+    }
+
+    /* =========================================================
+       六、初始化：讀取一次，之後每 60 秒背景更新（分頁在背景時暫停）
+       ========================================================= */
+    hydrateIcons();
+    load(false);
+    setInterval(()=>{if(!document.hidden&&S.tab==='list')load(true);},60000);
+  </script>
+</body>
+</html>

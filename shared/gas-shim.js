@@ -91,7 +91,11 @@
     // 轉送設定：window.gasRoutes[函式名稱] = { url, fn, onCall, onData }
     // 用於把特定呼叫（例如後台登入）改送到其他 GAS 專案，並在成功後執行 onData
     var route = window.gasRoutes && window.gasRoutes[fnName];
-    var targetUrl = (route && route.url) || GAS_URL;
+    // 每次呼叫時重新讀取（config.js 載入順序或快取問題時，比較容易看出原因）
+    var targetUrl = (route && route.url) || window.GAS_URL || GAS_URL;
+    if (!targetUrl || !/^https:\/\/script\.google\.com\//.test(targetUrl)) {
+      return Promise.reject(new Error('找不到後端網址：請確認同資料夾的 config.js 已上傳到 GitHub，且 GAS_URL 已填入 /exec 網址。'));
+    }
     var targetFn = (route && route.fn) || fnName;
     if (route && typeof route.onCall === 'function') {
       try { route.onCall(args); } catch (e) {}

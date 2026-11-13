@@ -3,8 +3,8 @@
   <script src="./config.js?v=1"></script>
   <script src="../shared/gas-shim.js?v=3"></script>
   <!-- 手機輸入時不自動放大：iPhone 在輸入框字級小於 16px 時會自動放大畫面，這裡把手機寬度下的輸入框字級固定為 16px -->
-  <style>@media (max-width: 768px){ input, select, textarea { font-size: 16px !important; } }</style>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>
+  <style>@media (max-width: 768px){ html body input, html body select, html body textarea { font-size: 16px !important; } }</style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><script>
 (function(){
   try{
     document.documentElement.dataset.theme=localStorage.getItem('dutyThemeCarbon')||'light';

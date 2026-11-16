@@ -1989,7 +1989,8 @@ function load(done,fail){
       return `<div class="row"><div><b>${esc(x.name)}</b><div class="muted">${esc(x.scheduleText||'')}</div></div><span class="badge ${mobileDutyBadgeClass(displayStatus)}">${esc(displayStatus)}</span></div>`;
     }).join(''):'<div class="empty">今日沒有排班</div>';
 
-    $('mobileTodos').innerHTML=(d.todos||[]).length?d.todos.map(x=>`<div class="row"><div><b>${esc(x.title)}</b><div class="muted">${esc(x.priority)}｜${esc(x.assignee)}${x.due?'｜'+esc(x.due):''}${x.dueTime?' '+esc(x.dueTime):''}</div></div>${x.status==='已完成'?'<span class="badge todo-done-badge">已完成</span>':`<button class="btn todo-complete-btn" onclick="doneTodo('${esc(x.id)}')">標記完成</button>`}</div>`).join(''):'<div class="empty">沒有未完成事項</div>';
+    // 已完成的待辦只在後台看得到，工讀生端只列出未完成事項（pending 在上方已過濾）
+    $('mobileTodos').innerHTML=pending.length?pending.map(x=>`<div class="row"><div><b>${esc(x.title)}</b><div class="muted">${esc(x.priority)}｜${esc(x.assignee)}${x.due?'｜'+esc(x.due):''}${x.dueTime?' '+esc(x.dueTime):''}</div></div>${x.status==='已完成'?'<span class="badge todo-done-badge">已完成</span>':`<button class="btn todo-complete-btn" onclick="doneTodo('${esc(x.id)}')">標記完成</button>`}</div>`).join(''):'<div class="empty">沒有未完成事項</div>';
 
     $('requests').innerHTML=(d.requests||[]).length?d.requests.map(x=>`<div class="row"><div><b>${esc(x.date)}｜${esc(x.timeIn||'—')}–${esc(x.timeOut||'—')}</b><div class="muted">${esc(x.reason)}${x.note?'｜'+esc(x.note):''}</div></div><div class="request-side">${cancelRequestBtn('makeup',x)}<span class="badge ${x.status==='待審核'?'warn':x.status==='已退回'?'bad':''}">${esc(x.status)}</span></div></div>`).join(''):'<div class="empty">目前沒有補打卡申請</div>';
 

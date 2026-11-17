@@ -219,11 +219,12 @@
     .course-chips button{background:#eef2fb;color:#1e3a8a;border:1px solid #1e3a8a;padding:3px 8px;font-size:12px;font-weight:600;}
     .cds-label{display:block;font-size:12px;color:#525252;margin-bottom:6px;font-weight:600;}
     .cds-field{position:relative;}
-    .cds-input{width:100%;height:44px;background:#f4f4f4;border:0;border-bottom:1px solid #8d8d8d;padding:0 40px 0 14px;font-size:15px;color:#161616;outline:none;border-radius:0;-webkit-appearance:none;appearance:none;}
+    .cds-input{width:100%;height:44px;background:#f4f4f4;border:0;border-bottom:1px solid #8d8d8d;padding:0 40px 0 14px;font-size:16px;color:#161616;outline:none;border-radius:0;-webkit-appearance:none;appearance:none;}
     .cds-input:focus{outline:2px solid #1e3a8a;outline-offset:-2px;}
     .cds-input[readonly]{cursor:pointer;}
     .cds-input.is-invalid{outline:2px solid #da1e28;outline-offset:-2px;}
     .cds-field .cds-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#161616;pointer-events:none;width:16px;height:16px;}
+    /* V2.5.8e：iPhone 點選字級小於 16px 的輸入框會自動放大畫面，cds-input 統一 16px 避免放大 */
     .cds-helper{font-size:12px;color:#6f6f6f;margin-top:6px;min-height:16px;}
     .cds-helper.is-error{color:#da1e28;}
     .course-tile{display:block;width:100%;text-align:left;background:#fff;border:1px solid #e0e0e0;padding:12px 14px;position:relative;}
@@ -1331,11 +1332,11 @@
     const box = document.getElementById('roomList');
     if (!box) return;
 
-    // V2.5.8d：上課使用時，只列出所選課程的教室，鑰匙／遙控器由系統帶入、不能點選
+    // V2.5.8e：上課使用時，只列出所選課程的教室；鑰匙／遙控器由系統預先勾選，學生仍可自行取消
     if (state.returnMode === 'COURSE') {
       const ids = selectedCoursesFrom(state.courses, state.courseIds).map(c => c.roomId).filter(Boolean);
       const lockedRooms = allRooms.filter(r => ids.includes(r.id));
-      box.innerHTML = '<p class="cds-helper mb-2">上課使用：鑰匙與冷氣遙控器由系統依你選的課程帶入，不需要點選。</p>' +
+      box.innerHTML = '<p class="cds-helper mb-2">上課使用：系統已依你選的課程帶入鑰匙與冷氣遙控器，不需要的可以點一下取消。</p>' +
         (lockedRooms.length ? lockedRooms.map(roomAssetRowHtml).join('')
           : '<div class="text-center py-8 text-xs text-slate-400">請先在第 2 步選擇課程</div>');
       return;
@@ -1394,18 +1395,13 @@
       stateText = '借出中';
       cardClass = 'border-rose-100 bg-rose-50/40 cursor-not-allowed';
       stateClass = 'text-rose-500';
-    } else if (state.returnMode === 'COURSE') {
-      // V2.5.8d：上課使用由系統帶入，學生不能點選
-      stateText = checked ? '系統帶入' : '未帶入';
-      cardClass = 'border-slate-200 bg-white cursor-default';
-      stateClass = checked ? 'text-teal-700' : 'text-slate-400';
     } else {
       stateText = '可借用';
       cardClass = 'border-slate-200 bg-white cursor-pointer';
       stateClass = 'text-emerald-600';
     }
 
-    const disabled = noLoan || !exists || (!available && !checked) || state.returnMode === 'COURSE';
+    const disabled = noLoan || !exists || (!available && !checked);
 
     return `<div>
       <input class="asset-input sr-only" type="checkbox" id="${domId}" data-type="${type}" data-id="${escapeAttr(id)}"
@@ -1465,7 +1461,6 @@
   }
 
   function handleRoomToggle(el) {
-    if (state.returnMode === 'COURSE') { el.checked = !el.checked; return; }   // V2.5.8d：上課使用不可手動改
     const set = el.dataset.type === 'ROOM_KEY' ? state.roomKeyIds : state.remoteIds;
     el.checked ? set.add(el.dataset.id) : set.delete(el.dataset.id);
     updateSelectedUI();
@@ -1766,14 +1761,13 @@
       cardClass = 'border-rose-100 bg-rose-50/40 cursor-not-allowed';
       stateClass = 'text-rose-500';
     } else {
-      // V2.5.8d：預約一律由系統依課堂帶入，學生不能點選
-      stateText = checked ? '系統帶入' : '未帶入';
-      cardClass = 'border-slate-200 bg-white cursor-default';
-      stateClass = checked ? 'text-indigo-700' : 'text-slate-400';
+      stateText = '可預約';
+      cardClass = 'border-slate-200 bg-white cursor-pointer';
+      stateClass = 'text-emerald-600';
     }
 
     const domId = 'reserve_' + type + '_' + safeDomId(roomId);
-    const disabled = true;   // V2.5.8d：鑰匙／遙控器不開放學生點選
+    const disabled = noLoan || !exists || (!timeAvailable && !checked);   // V2.5.8e：恢復可點選（系統預先勾選，學生可取消）
 
     return `<div>
       <input class="reserve-asset-input sr-only" type="checkbox" id="${domId}"
@@ -1789,7 +1783,6 @@
   }
 
   function handleReserveRoomToggle(el) {
-    el.checked = !el.checked; return;   // V2.5.8d：預約的鑰匙／遙控器由系統帶入，不可手動改
     const set = el.dataset.type === 'ROOM_KEY' ? state.reserveRoomKeyIds : state.reserveRemoteIds;
     el.checked ? set.add(el.dataset.id) : set.delete(el.dataset.id);
     updateSelectedUI();
@@ -2253,7 +2246,7 @@
   }
 
   // 選了課：自動帶入該教室的「鑰匙」與「冷氣遙控器」
-  // V2.5.8d：上課使用時學生不能自行點選或取消，避免漏借、工讀生還要手動補
+  // V2.5.8e：預先勾選避免漏借；學生不需要時可在第 3 步自行取消
   function autoSelectCourseRoomKey(course) {
     const c = course || currentCourse();
     const hint = document.getElementById('courseHint');
@@ -2284,7 +2277,7 @@
     if (state.assetTab === 'ROOM') renderRooms();
     updateSelectedUI();
     const parts = [];
-    if (picked.length) parts.push('系統已帶入 ' + room.name + ' 的' + picked.join('與') + '。');
+    if (picked.length) parts.push('已幫你選取 ' + room.name + ' 的' + picked.join('與') + '，不需要的可在第 3 步取消。');
     if (busy.length) { hint.className = 'cds-helper is-error'; parts.push(room.name + ' 的' + busy.join('與') + '目前借出中，請洽院辦。'); }
     hint.textContent = parts.join(' ');
   }
@@ -2683,12 +2676,10 @@
     } else {
       // 課堂教室的鑰匙與冷氣遙控器都預先勾選（之後仍會依時段確認是否可預約）
       // 學生不需要遙控器時，可在第 3 步自行取消勾選
-      // V2.5.8d：依所有已選課堂帶入鑰匙與遙控器（學生不能取消；時段衝突的會在查詢後自動移除）
-      c.list.forEach(x => {
-        const room = (state.data?.rooms || []).find(r => r.id === x.roomId);
-        if (room && room.hasKey && !room.noLoan) state.reserveRoomKeyIds.add(room.id);
-        if (roomRemoteLoanable(room)) state.reserveRemoteIds.add(room.id);
-      });
+      // V2.5.8e：只替這次新加入的課堂預先勾選鑰匙與遙控器；學生取消的項目不會被加回來
+      const room = added ? (state.data?.rooms || []).find(r => r.id === added.roomId) : null;
+      if (room && room.hasKey && !room.noLoan) state.reserveRoomKeyIds.add(room.id);
+      if (roomRemoteLoanable(room)) state.reserveRemoteIds.add(room.id);
       const buf = Number(state.resvCourses?.bufferMin) || 30;
       if (dueBox) dueBox.innerHTML = c.list.length > 1
         ? `<b>共 ${c.list.length} 堂，每堂各自歸還</b>` + c.list.map(x => `<p>${escapeHtml(x.classroom)} ${escapeHtml(x.title)}：${escapeHtml(x.startTime)}～${escapeHtml(x.endTime)}，${escapeHtml(resvDueText(x))}歸還</p>`).join('')

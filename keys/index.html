@@ -445,9 +445,38 @@
 
       <!-- Reservation flow -->
       <div id="reserveFlow" class="hidden space-y-4">
+        <!-- V2.5.8：預約只受理排課系統中登錄的課堂（含院辦登錄的會議、活動），日期、時段、教室、歸還時間依課堂鎖定 -->
         <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div class="flex items-center gap-3 mb-4">
             <span class="w-8 h-8 rounded-circle bg-indigo-600 text-white flex items-center justify-center font-black text-sm">2</span>
+            <div class="flex-1">
+              <h2 class="font-black text-sm">選擇預約的課堂</h2>
+              <p class="text-[11px] text-slate-400">只能預約排課系統中已登錄的課程、會議或活動</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1.5">使用日期 *</label>
+              <div class="relative">
+                <input id="reserveDate" type="date" onchange="onReserveDateChange()" class="reserve-date-input w-full rounded-2xl border border-slate-200 px-4 pr-11 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500">
+              </div>
+            </div>
+
+            <div class="cds-field">
+              <label class="cds-label" for="resvCourseDept">系所 *</label>
+              <select id="resvCourseDept" class="cds-input" onchange="selectResvDept(this.value)"><option value="">請先選日期</option></select>
+              <svg class="cds-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <div>
+              <label class="cds-label">課堂 *</label>
+              <div id="resvCourseList"><p class="cds-helper">請先選擇系所</p></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-8 h-8 rounded-circle bg-indigo-600 text-white flex items-center justify-center font-black text-sm">3</span>
             <div class="flex-1">
               <h2 class="font-black text-sm">選擇預約借用品</h2>
               <p class="text-[11px] text-slate-400">鑰匙、遙控器可單獨預約；數量型設備直接選數量</p>
@@ -495,20 +524,14 @@
 
         <section class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <div class="flex items-center gap-3 mb-4">
-            <span class="w-8 h-8 rounded-circle bg-indigo-600 text-white flex items-center justify-center font-black text-sm">3</span>
+            <span class="w-8 h-8 rounded-circle bg-indigo-600 text-white flex items-center justify-center font-black text-sm">4</span>
             <div>
               <h2 class="font-black text-sm">借還時間與歸還方式</h2>
+              <p class="text-[11px] text-slate-400">時段與歸還時間依課堂自動帶入，不能修改</p>
             </div>
           </div>
 
           <div class="grid grid-cols-1 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-slate-600 mb-1.5">使用日期 *</label>
-              <div class="relative">
-                <input id="reserveDate" type="date" onchange="refreshReservationAvailability()" class="reserve-date-input w-full rounded-2xl border border-slate-200 px-4 pr-11 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500">
-              </div>
-            </div>
-
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="block text-xs font-bold text-slate-600 mb-1.5">開始時間 *</label>
@@ -546,10 +569,9 @@
             <div>
               <label class="block text-xs font-bold text-slate-600 mb-1.5">歸還時間 *</label>
               <div class="relative">
-                <select id="reserveReturnTime" class="reserve-time-select w-full rounded-2xl border border-slate-200 px-3 pr-9 text-sm font-black outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option value="">請選擇</option>
-                </select>
-                <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">▼</span>
+                <!-- V2.5.8：歸還時間＝下課時間＋緩衝，自動計算；保留隱藏的 select 以相容舊程式 -->
+                <select id="reserveReturnTime" class="hidden"><option value="">請選擇</option></select>
+                <div id="resvDueBox" class="due-summary"><b>請先在第 2 步選擇課堂</b><p>選好課堂後，這裡會顯示歸還時間</p></div>
               </div>
             </div>
 
@@ -566,7 +588,7 @@
                 <span class="text-sm font-black text-amber-900">提醒</span>
               </div>
               <ol class="list-decimal pl-5 space-y-1 text-xs leading-6 text-amber-900 font-medium">
-                <li>課程若超過下午5點，請點選歸還箱，謝謝。</li>
+                <li>課程在下午 5 點後結束時，系統會自動設為「歸還箱」，結束後請把借用品投入歸還箱，謝謝。</li>
                 <li>本表單登記預約後，時間到會自動轉成借用單，不需再多填一次，謝謝各位配合。</li>
               </ol>
             </div>
@@ -714,6 +736,9 @@
     dueDate: '',               // 非課程使用：yyyy-MM-dd
     dueTime: '',               // 非課程使用：HH:mm
     calMonth: null,            // 日期盤目前顯示的月份（Date，當月 1 日）
+    resvCourses: null,         // 預約：所選日期的課堂（getCoursesByDateV2）
+    resvDept: '',
+    resvCourseId: '',
     reserveRoomKeyIds: new Set(),
     reserveRemoteIds: new Set(),
     reserveEquipmentCategory: '全部',
@@ -811,6 +836,7 @@
           document.getElementById('reserveDate').value ||= data.today;
         }
         if (data.maxReservationDate) document.getElementById('reserveDate').max = data.maxReservationDate;
+        if (!state.resvCourses) loadResvCourses();   // V2.5.8：預約課堂
         // 共用控制項先初始化；大量教室 / 設備卡片只 render 目前看得到的頁籤。
         inventoryLastRefreshMs = Date.now();
         document.getElementById('equipmentStockUpdatedAt').textContent = '庫存更新：剛剛';
@@ -1593,7 +1619,13 @@
       }).join('');
     }
 
+    // V2.5.8：教室依課堂鎖定，只顯示課堂所在的教室
+    const rc = currentResvCourse();
+    const roomBox = document.getElementById('reserveRoomList');
+    if (!rc) { if (roomBox) roomBox.innerHTML = '<div class="text-center py-8 text-xs text-slate-400">請先在第 2 步選擇課堂</div>'; return; }
+    if (!rc.roomId) { if (roomBox) roomBox.innerHTML = `<div class="text-center py-8 text-xs text-slate-400">${escapeHtml(rc.classroom || '此課堂')} 沒有可預約的鑰匙或遙控器，只能預約設備</div>`; return; }
     const filtered = allRooms.filter(room => {
+      if (room.id !== rc.roomId) return false;
       if (state.reserveRoomFloor !== '全部' && String(room.floor || '未分類') !== state.reserveRoomFloor) return false;
       if (q && !(`${room.floor} ${room.name}`.toLowerCase().includes(q))) return false;
       return true;
@@ -1733,6 +1765,7 @@
       methodSelect.innerHTML = '<option value="">請選擇</option>' +
         methods.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
       if (currentMethod && methods.includes(currentMethod)) methodSelect.value = currentMethod;
+      if (typeof applyResvReturnMethodLock === 'function') applyResvReturnMethodLock();
     }
 
     // 歸還時間與立即借用共用「設定」分頁的 RETURN_OPTIONS。
@@ -1990,6 +2023,18 @@
   function renderReservationTimeSelects(preserveValues = true) {
     if (!state.data) return;
 
+    // V2.5.8：預約時段依課堂鎖定。選了課堂就只放課堂時段；沒選課堂時兩個選單都鎖住
+    const lockedCourse = currentResvCourse();
+    if (lockedCourse) {
+      const s = document.getElementById('reserveStart'), e = document.getElementById('reserveEnd');
+      if (!s || !e) return;
+      s.innerHTML = `<option value="${escapeAttr(lockedCourse.startTime)}">${escapeHtml(lockedCourse.startTime)}</option>`;
+      e.innerHTML = `<option value="${escapeAttr(lockedCourse.endTime)}">${escapeHtml(lockedCourse.endTime)}</option>`;
+      s.value = lockedCourse.startTime; e.value = lockedCourse.endTime;
+      s.disabled = true; e.disabled = true;
+      return;
+    }
+
     const options = state.data.reservationTimeOptions || [];
     const startSelect = document.getElementById('reserveStart');
     const endSelect = document.getElementById('reserveEnd');
@@ -2011,6 +2056,8 @@
     }
 
     renderReserveEndOptions(oldEnd);
+    startSelect.disabled = true;   // V2.5.8：沒選課堂前不能自行選時段
+    endSelect.disabled = true;
   }
 
   function renderReserveEndOptions(preferredValue = '') {
@@ -2100,6 +2147,8 @@
     if (!state.courses) return;              // 課程還沒載入，載入後 renderCoursePanel 會再套用
     const hit = matchCourseDept(state.profileDept);
     if (hit && !state.courseId) { state.courseDept = hit; renderCoursePanel(); }
+    // 預約課堂也一起預選系所（尚未選課堂時）
+    if (!state.resvCourseId && state.resvCourses) { state.resvDept = ''; renderResvCoursePanel(); }
   }
 
   function selectCourseDept(dept) {
@@ -2196,8 +2245,9 @@
     hint.textContent = isCourse ? `上課使用：下課後 ${buf} 分鐘內歸還` : '非課程使用：自行選擇歸還的日期與時間';
     if (isCourse) {
       const c = currentCourse();
+      const after = (state.courses && state.courses.dropboxAfter) || '17:00';
       courseBox.innerHTML = c
-        ? `<b>今天 ${escapeHtml(courseDueText(c))} 前歸還</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${escapeHtml(c.endTime)} 下課，下課後 ${buf} 分鐘內</p>`
+        ? `<b>今天 ${escapeHtml(courseDueText(c))} 前歸還${c.endTime > after ? '（投入歸還箱）' : ''}</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${escapeHtml(c.endTime)} 下課，下課後 ${buf} 分鐘內${c.endTime > after ? `；${escapeHtml(after)} 後院辦已下班，請把借用品投入歸還箱` : ''}</p>`
         : '<b>請先在第 2 步選擇課程</b><p>選好課程後，這裡會顯示歸還期限</p>';
     } else {
       document.getElementById('dueDateInput').value = state.dueDate ? state.dueDate.replace(/-/g, '/') : '';
@@ -2343,14 +2393,142 @@
   function returnPlanText() {
     if (state.returnMode === 'COURSE') {
       const c = currentCourse();
-      return c ? `今天 ${courseDueText(c)} 前（${c.title}，${c.endTime} 下課）` : '';
+      const after = (state.courses && state.courses.dropboxAfter) || '17:00';
+      return c ? `今天 ${courseDueText(c)} 前（${c.title}，${c.endTime} 下課${c.endTime > after ? '，投入歸還箱' : ''}）` : '';
     }
     return `${state.dueDate.replace(/-/g, '/')} ${state.dueTime} 前（非課程使用）`;
   }
 
+  /* ============================================================
+     V2.5.8：預約課堂（日期 → 系所 → 課堂），時段／教室／歸還時間全部鎖定
+     ============================================================ */
+  function loadResvCourses() {
+    const date = document.getElementById('reserveDate')?.value;
+    const list = document.getElementById('resvCourseList');
+    if (!date) return;
+    state.resvCourses = null;
+    if (list) list.innerHTML = '<p class="cds-helper">讀取課堂中…</p>';
+    google.script.run
+      .withSuccessHandler(res => {
+        if (document.getElementById('reserveDate')?.value !== date) return;   // 日期已經換掉，丟棄舊結果
+        state.resvCourses = res || { success:false, departments:[], courses:[] };
+        renderResvCoursePanel();
+      })
+      .withFailureHandler(() => {
+        state.resvCourses = { success:false, departments:[], courses:[], message:'目前讀不到課程資料，請稍後再試。' };
+        renderResvCoursePanel();
+      })
+      .getCoursesByDateV2(date);
+  }
+
+  function onReserveDateChange() {
+    state.resvCourseId = '';
+    applyResvCourse();
+    loadResvCourses();
+  }
+
+  function currentResvCourse() {
+    const list = (state.resvCourses && state.resvCourses.courses) || [];
+    return list.find(c => c.id === state.resvCourseId) || null;
+  }
+
+  function selectResvDept(dept) {
+    state.resvDept = dept;
+    state.resvCourseId = '';
+    renderResvCoursePanel();
+    applyResvCourse();
+  }
+
+  function selectResvCourse(id) {
+    state.resvCourseId = id;
+    renderResvCoursePanel();
+    applyResvCourse();
+  }
+
+  function renderResvCoursePanel() {
+    const sel = document.getElementById('resvCourseDept');
+    const box = document.getElementById('resvCourseList');
+    const data = state.resvCourses;
+    if (!sel || !box || !data) return;
+    if (!data.success || !(data.courses || []).length) {
+      sel.innerHTML = '<option value="">這天沒有可預約的課堂</option>';
+      sel.disabled = true;
+      box.innerHTML = `<p class="cds-helper">${escapeHtml(data.success ? '這一天排課系統沒有還沒結束的課程、會議或活動。' : (data.message || '目前讀不到課程資料。'))}需要使用教室請洽院辦登錄。</p>`;
+      return;
+    }
+    sel.disabled = false;
+    if (!state.resvDept) {
+      const prof = state.profileDept || '';
+      const list = data.departments;
+      state.resvDept = list.includes(prof) ? prof : (list.find(d => d.slice(0, 2) === prof.replace(/(助理|辦公室|學生)$/,'').slice(0, 2)) || '');
+    }
+    if (state.resvDept && !data.departments.includes(state.resvDept)) state.resvDept = '';
+    sel.innerHTML = '<option value="">請選擇系所</option>' + data.departments.map(d => `<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
+    sel.value = state.resvDept || '';
+    if (!state.resvDept) { box.innerHTML = '<p class="cds-helper">請先選擇系所</p>'; return; }
+    const courses = data.courses.filter(c => (c.depts || [c.department]).includes(state.resvDept));
+    box.innerHTML = courses.map(c => `<button type="button" class="course-tile ${state.resvCourseId === c.id ? 'is-selected' : ''}"
+        data-id="${escapeAttr(c.id)}" onclick="selectResvCourse(this.dataset.id)">
+        <b>${escapeHtml(c.title)}</b>
+        <span>${escapeHtml(c.classroom || '--')}｜${escapeHtml(c.startTime)}～${escapeHtml(c.endTime)}${c.person ? '｜' + escapeHtml(c.person) : ''}</span>
+      </button>`).join('') + '<p class="cds-helper">找不到你的課堂？請洽院辦確認是否已登錄排課系統。</p>';
+  }
+
+  // 依課堂鎖定開始／結束時間、教室與歸還時間
+  function applyResvCourse() {
+    const c = currentResvCourse();
+    const startSel = document.getElementById('reserveStart');
+    const endSel = document.getElementById('reserveEnd');
+    const dueBox = document.getElementById('resvDueBox');
+    // 教室只能是課堂所在教室：先清掉其他教室的選取
+    [state.reserveRoomKeyIds, state.reserveRemoteIds].forEach(set => [...set].forEach(id => { if (!c || id !== c.roomId) set.delete(id); }));
+    renderReservationTimeSelects(false);
+    applyResvReturnMethodLock();
+    if (!c) {
+      if (dueBox) dueBox.innerHTML = '<b>請先在第 2 步選擇課堂</b><p>選好課堂後，這裡會顯示歸還時間</p>';
+    } else {
+      // 課堂教室有鑰匙就預先勾選（之後仍會依時段確認是否可預約）
+      const room = (state.data?.rooms || []).find(r => r.id === c.roomId);
+      if (room && room.hasKey && !room.noLoan) state.reserveRoomKeyIds.add(room.id);
+      if (dueBox) dueBox.innerHTML = `<b>${escapeHtml(resvDueText())}</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${escapeHtml(c.endTime)} 結束，結束後 ${Number(state.resvCourses?.bufferMin) || 30} 分鐘內歸還</p>`;
+    }
+    refreshReservationAvailability();
+  }
+
+  // 課堂結束時間晚於院辦下班時間（預設 17:00）：歸還方式鎖定「歸還箱」
+  function applyResvReturnMethodLock() {
+    const sel = document.getElementById('reserveReturnMethod');
+    if (!sel) return;
+    const c = currentResvCourse();
+    const after = (state.resvCourses && state.resvCourses.dropboxAfter) || '17:00';
+    const lock = !!(c && c.endTime > after);
+    if (lock) {
+      if (![...sel.options].some(o => o.value === '歸還箱')) sel.insertAdjacentHTML('beforeend', '<option value="歸還箱">歸還箱</option>');
+      sel.value = '歸還箱';
+      sel.dataset.autoLocked = '1';
+    } else if (sel.dataset.autoLocked) {
+      sel.value = '';                 // 先前是系統自動鎖成歸還箱，解除鎖定時清掉，讓學生自己選
+      delete sel.dataset.autoLocked;
+    }
+    sel.disabled = lock;
+    let hint = document.getElementById('resvMethodHint');
+    if (!hint) { sel.parentElement.insertAdjacentHTML('afterend', '<p id="resvMethodHint" class="cds-helper"></p>'); hint = document.getElementById('resvMethodHint'); }
+    hint.textContent = lock ? `課堂 ${c.endTime} 結束，${after} 後院辦已下班，一律投入歸還箱。` : '';
+  }
+
+  function resvDueText() {
+    const c = currentResvCourse();
+    if (!c) return '';
+    const date = document.getElementById('reserveDate')?.value || '';
+    const buf = Number(state.resvCourses?.bufferMin) || 30;
+    const [h, m] = c.endTime.split(':').map(Number);
+    const total = h * 60 + m + buf;
+    return `${date.replace(/-/g, '/')} ${pad2(Math.floor(total / 60) % 24)}:${pad2(total % 60)} 前`;
+  }
+
   function commonPayload() { return { studentId:document.getElementById('studentId').value.trim(), studentName:document.getElementById('studentName').value.trim(), phone:document.getElementById('phone').value.trim(), department:document.getElementById('department').value.trim() }; }
   function borrowPayload() { return { ...commonPayload(), ...returnPayload(), note:document.getElementById('borrowNote').value.trim(), roomKeyIds:[...state.roomKeyIds], remoteIds:[...state.remoteIds], equipmentItems:[...state.equipmentQty.entries()].map(([id,qty]) => ({id,qty})) }; }
-  function reservePayload() { return { ...commonPayload(), roomKeyIds:[...state.reserveRoomKeyIds], remoteIds:[...state.reserveRemoteIds], equipmentItems:[...state.reserveEquipmentQty.entries()].map(([id,qty])=>({id,qty})), useDate:document.getElementById('reserveDate').value, startTime:document.getElementById('reserveStart').value, endTime:document.getElementById('reserveEnd').value, returnMethod:document.getElementById('reserveReturnMethod').value, returnTime:document.getElementById('reserveReturnTime').value, note:document.getElementById('reserveNote').value.trim() }; }
+  function reservePayload() { return { ...commonPayload(), roomKeyIds:[...state.reserveRoomKeyIds], remoteIds:[...state.reserveRemoteIds], equipmentItems:[...state.reserveEquipmentQty.entries()].map(([id,qty])=>({id,qty})), useDate:document.getElementById('reserveDate').value, startTime:document.getElementById('reserveStart').value, endTime:document.getElementById('reserveEnd').value, returnMethod:document.getElementById('reserveReturnMethod').value, courseId:state.resvCourseId, note:document.getElementById('reserveNote').value.trim() }; }
 
   function validateCommon(p) {
     const missing=[]; if(!p.studentId)missing.push('學號 / 員編'); if(!p.studentName)missing.push('姓名'); if(!p.phone)missing.push('聯絡電話'); if(!p.department)missing.push('系所 / 單位');
@@ -2390,7 +2568,7 @@
       if (!p.useDate || !p.startTime || !p.endTime) return showToast('請完整選擇使用日期與時間。','error');
       if (p.startTime >= p.endTime) return showToast('結束時間必須晚於開始時間。','error');
       if (!p.returnMethod) return showToast('請選擇歸還方式。','error');
-      if (!p.returnTime) return showToast('請選擇歸還時間。','error');
+      if (!p.courseId) return showToast('請在第 2 步選擇課堂。','error');
 
       // 若已取得時段狀態，先在前端阻擋明顯衝突；後端送出時仍會再次驗證。
       const conflictedRooms = [...new Set([
@@ -2408,7 +2586,7 @@
         <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">預約借用品</p><div class="mt-2 flex flex-wrap gap-1.5">${items.map(i=>`<span class="px-2 py-1 rounded-full bg-white border border-indigo-200 text-xs font-bold">${escapeHtml(i.name)}${i.qty>1?' ×'+i.qty+escapeHtml(i.unit):''}</span>`).join('')}</div></div>
         <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">使用時段</p><p class="mt-1 font-black">${escapeHtml(p.useDate)}　${escapeHtml(p.startTime)}–${escapeHtml(p.endTime)}</p></div>
         <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">歸還方式</p><p class="mt-1 font-black">${escapeHtml(p.returnMethod)}</p></div>
-        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">歸還時間</p><p class="mt-1 font-black">${escapeHtml(p.returnTime)}</p></div>
+        <div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">歸還時間</p><p class="mt-1 font-black">${escapeHtml(resvDueText())}</p></div>
         ${p.note ? `<div class="px-4 py-3"><p class="text-[10px] text-indigo-400 font-bold">備註</p><p class="mt-1 text-sm font-medium text-slate-700 whitespace-pre-wrap">${escapeHtml(p.note)}</p></div>` : ''}
       </div>`;
     }
@@ -2549,6 +2727,7 @@
 
     const reserveReturnTime = document.getElementById('reserveReturnTime');
     if (reserveReturnTime) reserveReturnTime.value = '';
+    onReserveDateChange();   // V2.5.8：清掉課堂、解除鎖定並重新讀今天的課堂
 
     // 4. 只重畫目前看得到的流程，避免一次產生兩套大量 DOM。
     setReturnMode('COURSE');

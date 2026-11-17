@@ -46,6 +46,9 @@
     };
   </script>
   <style>
+    /* V2.5.8e：關閉「點兩下放大」。連續按設備數量的 ＋／－ 時，iPhone 會把兩次點擊當成雙擊而放大畫面；
+       manipulation 只取消雙擊縮放，仍保留雙指縮放（方便需要放大字體的人），也讓點擊不再有 300ms 延遲 */
+    html, body, * { touch-action: manipulation; }
     html { -webkit-tap-highlight-color: transparent; }
     body {
       font-family: "Microsoft JhengHei", "微軟正黑體", ui-sans-serif, system-ui,

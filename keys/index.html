@@ -211,6 +211,12 @@
     .cds-switcher button{height:40px;font-size:13px;font-weight:600;color:#525252;background:#fff;border:0;}
     .cds-switcher button+button{border-left:1px solid #8d8d8d;}
     .cds-switcher button.is-active{background:#1e3a8a;color:#fff;}
+    /* V2.5.8c：課程篩選方式（依系所／依教室／顯示全部）三格切換 */
+    .cds-switcher.is-3{grid-template-columns:1fr 1fr 1fr;}
+    .cds-switcher.is-sm button{height:34px;font-size:12px;}
+    /* V2.5.8c：已選課堂標籤 */
+    .course-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:0 0 8px;font-size:12px;color:#525252;}
+    .course-chips button{background:#eef2fb;color:#1e3a8a;border:1px solid #1e3a8a;padding:3px 8px;font-size:12px;font-weight:600;}
     .cds-label{display:block;font-size:12px;color:#525252;margin-bottom:6px;font-weight:600;}
     .cds-field{position:relative;}
     .cds-input{width:100%;height:44px;background:#f4f4f4;border:0;border-bottom:1px solid #8d8d8d;padding:0 40px 0 14px;font-size:15px;color:#161616;outline:none;border-radius:0;-webkit-appearance:none;appearance:none;}
@@ -336,9 +342,15 @@
             <button type="button" id="useModeOther" onclick="setReturnMode('OTHER')">非課程使用</button>
           </div>
           <div id="coursePanel">
-            <div class="cds-field mb-3">
-              <label class="cds-label" for="courseDept">系所 *</label>
-              <select id="courseDept" class="cds-input" onchange="selectCourseDept(this.value)"><option value="">載入課程中…</option></select>
+            <!-- V2.5.8c：學生不一定知道開課系所，可改用教室篩選或顯示全部 -->
+            <!-- V2.5.8d：移除依系所（名冊與排課的系所名稱不必統一），只留依教室／顯示全部 -->
+            <div class="cds-switcher is-sm mb-3" role="tablist" aria-label="課程篩選方式">
+              <button type="button" data-filter="ROOM" class="course-filter-btn is-active" onclick="setCourseFilter('NOW', 'ROOM')">依教室</button>
+              <button type="button" data-filter="ALL" class="course-filter-btn" onclick="setCourseFilter('NOW', 'ALL')">顯示全部</button>
+            </div>
+            <div id="courseFilterField" class="cds-field mb-3">
+              <label id="courseFilterLabel" class="cds-label" for="courseDept">教室 *</label>
+              <select id="courseDept" class="cds-input" onchange="onCourseFilterValue('NOW', this.value)"><option value="">載入課程中…</option></select>
               <svg class="cds-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
             </div>
             <label class="cds-label">今天的課程 *</label>
@@ -462,9 +474,14 @@
               </div>
             </div>
 
-            <div class="cds-field">
-              <label class="cds-label" for="resvCourseDept">系所 *</label>
-              <select id="resvCourseDept" class="cds-input" onchange="selectResvDept(this.value)"><option value="">請先選日期</option></select>
+            <!-- V2.5.8c：課程篩選方式，同立即借用 -->
+            <div class="cds-switcher is-sm" role="tablist" aria-label="課堂篩選方式">
+              <button type="button" data-filter="ROOM" class="resv-filter-btn is-active" onclick="setCourseFilter('RESV', 'ROOM')">依教室</button>
+              <button type="button" data-filter="ALL" class="resv-filter-btn" onclick="setCourseFilter('RESV', 'ALL')">顯示全部</button>
+            </div>
+            <div id="resvFilterField" class="cds-field">
+              <label id="resvFilterLabel" class="cds-label" for="resvCourseDept">教室 *</label>
+              <select id="resvCourseDept" class="cds-input" onchange="onCourseFilterValue('RESV', this.value)"><option value="">請先選日期</option></select>
               <svg class="cds-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
             </div>
             <div>
@@ -732,13 +749,19 @@
     returnMode: 'COURSE',      // COURSE＝上課使用；OTHER＝非課程使用
     courses: null,             // getTodayCoursesV2 的結果
     courseDept: '',
-    courseId: '',
+    courseFilter: 'ROOM',      // V2.5.8d：ROOM 依教室（預設）｜ALL 顯示全部
+    courseRoom: '',            // 依教室篩選時選的教室
+    courseId: '',              // 相容舊程式：等於 courseIds[0]
+    courseIds: [],             // V2.5.8c：可複選多堂課（借多間教室）
     dueDate: '',               // 非課程使用：yyyy-MM-dd
     dueTime: '',               // 非課程使用：HH:mm
     calMonth: null,            // 日期盤目前顯示的月份（Date，當月 1 日）
     resvCourses: null,         // 預約：所選日期的課堂（getCoursesByDateV2）
     resvDept: '',
-    resvCourseId: '',
+    resvFilter: 'ROOM',        // V2.5.8d：預約的篩選方式，ROOM／ALL
+    resvRoom: '',              // 預約依教室篩選時選的教室
+    resvCourseId: '',          // 相容舊程式：等於 resvCourseIds[0]
+    resvCourseIds: [],         // V2.5.8c：預約可複選多堂課，送出時每堂課拆成一筆
     reserveRoomKeyIds: new Set(),
     reserveRemoteIds: new Set(),
     reserveEquipmentCategory: '全部',
@@ -973,7 +996,6 @@
       document.getElementById('studentName').value = res.name || '';
       document.getElementById('department').value = res.department || '';
       document.getElementById('phone').value = res.phone || '';
-      preselectCourseDept(res.department || '');   // V2.5.8：用名冊系所自動預選上課系所
       // 黑名單時不顯示綠色「已帶入」，避免與下方紅色提醒互相矛盾
       status.innerHTML = isBlacklisted ? '' : licon('check','licon-sm') + ' 已帶入名冊資料（正式資料以名冊為準）';
       status.className = 'mt-1.5 text-[11px] min-h-[16px] text-emerald-600 font-bold';
@@ -1306,14 +1328,24 @@
       }).join('');
     }
 
+    const box = document.getElementById('roomList');
+    if (!box) return;
+
+    // V2.5.8d：上課使用時，只列出所選課程的教室，鑰匙／遙控器由系統帶入、不能點選
+    if (state.returnMode === 'COURSE') {
+      const ids = selectedCoursesFrom(state.courses, state.courseIds).map(c => c.roomId).filter(Boolean);
+      const lockedRooms = allRooms.filter(r => ids.includes(r.id));
+      box.innerHTML = '<p class="cds-helper mb-2">上課使用：鑰匙與冷氣遙控器由系統依你選的課程帶入，不需要點選。</p>' +
+        (lockedRooms.length ? lockedRooms.map(roomAssetRowHtml).join('')
+          : '<div class="text-center py-8 text-xs text-slate-400">請先在第 2 步選擇課程</div>');
+      return;
+    }
+
     const filtered = allRooms.filter(room => {
       if (state.roomFloor !== '全部' && String(room.floor || '未分類') !== state.roomFloor) return false;
       if (q && !(`${room.floor} ${room.name}`.toLowerCase().includes(q))) return false;
       return true;
     });
-
-    const box = document.getElementById('roomList');
-    if (!box) return;
 
     box.innerHTML = filtered.length
       ? filtered.map(roomAssetRowHtml).join('')
@@ -1358,17 +1390,22 @@
       title = type === 'ROOM_KEY' ? licon('key-round') + ' 無鑰匙' : licon('air-vent') + ' 無遙控器';
       cardClass = 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed';
       stateClass = 'text-slate-400';
-    } else if (!available) {
+    } else if (!available && !checked) {
       stateText = '借出中';
       cardClass = 'border-rose-100 bg-rose-50/40 cursor-not-allowed';
       stateClass = 'text-rose-500';
+    } else if (state.returnMode === 'COURSE') {
+      // V2.5.8d：上課使用由系統帶入，學生不能點選
+      stateText = checked ? '系統帶入' : '未帶入';
+      cardClass = 'border-slate-200 bg-white cursor-default';
+      stateClass = checked ? 'text-teal-700' : 'text-slate-400';
     } else {
       stateText = '可借用';
       cardClass = 'border-slate-200 bg-white cursor-pointer';
       stateClass = 'text-emerald-600';
     }
 
-    const disabled = noLoan || !exists || !available;
+    const disabled = noLoan || !exists || (!available && !checked) || state.returnMode === 'COURSE';
 
     return `<div>
       <input class="asset-input sr-only" type="checkbox" id="${domId}" data-type="${type}" data-id="${escapeAttr(id)}"
@@ -1428,6 +1465,7 @@
   }
 
   function handleRoomToggle(el) {
+    if (state.returnMode === 'COURSE') { el.checked = !el.checked; return; }   // V2.5.8d：上課使用不可手動改
     const set = el.dataset.type === 'ROOM_KEY' ? state.roomKeyIds : state.remoteIds;
     el.checked ? set.add(el.dataset.id) : set.delete(el.dataset.id);
     updateSelectedUI();
@@ -1623,9 +1661,9 @@
     const rc = currentResvCourse();
     const roomBox = document.getElementById('reserveRoomList');
     if (!rc) { if (roomBox) roomBox.innerHTML = '<div class="text-center py-8 text-xs text-slate-400">請先在第 2 步選擇課堂</div>'; return; }
-    if (!rc.roomId) { if (roomBox) roomBox.innerHTML = `<div class="text-center py-8 text-xs text-slate-400">${escapeHtml(rc.classroom || '此課堂')} 沒有可預約的鑰匙或遙控器，只能預約設備</div>`; return; }
+    if (!rc.roomIds.length) { if (roomBox) roomBox.innerHTML = `<div class="text-center py-8 text-xs text-slate-400">${escapeHtml(rc.classroom || '此課堂')} 沒有可預約的鑰匙或遙控器，只能預約設備</div>`; return; }
     const filtered = allRooms.filter(room => {
-      if (room.id !== rc.roomId) return false;
+      if (!rc.roomIds.includes(room.id)) return false;
       if (state.reserveRoomFloor !== '全部' && String(room.floor || '未分類') !== state.reserveRoomFloor) return false;
       if (q && !(`${room.floor} ${room.name}`.toLowerCase().includes(q))) return false;
       return true;
@@ -1728,13 +1766,14 @@
       cardClass = 'border-rose-100 bg-rose-50/40 cursor-not-allowed';
       stateClass = 'text-rose-500';
     } else {
-      stateText = '可預約';
-      cardClass = 'border-slate-200 bg-white cursor-pointer';
-      stateClass = 'text-emerald-600';
+      // V2.5.8d：預約一律由系統依課堂帶入，學生不能點選
+      stateText = checked ? '系統帶入' : '未帶入';
+      cardClass = 'border-slate-200 bg-white cursor-default';
+      stateClass = checked ? 'text-indigo-700' : 'text-slate-400';
     }
 
     const domId = 'reserve_' + type + '_' + safeDomId(roomId);
-    const disabled = noLoan || !exists || (!timeAvailable && !checked);
+    const disabled = true;   // V2.5.8d：鑰匙／遙控器不開放學生點選
 
     return `<div>
       <input class="reserve-asset-input sr-only" type="checkbox" id="${domId}"
@@ -1750,6 +1789,7 @@
   }
 
   function handleReserveRoomToggle(el) {
+    el.checked = !el.checked; return;   // V2.5.8d：預約的鑰匙／遙控器由系統帶入，不可手動改
     const set = el.dataset.type === 'ROOM_KEY' ? state.reserveRoomKeyIds : state.reserveRemoteIds;
     el.checked ? set.add(el.dataset.id) : set.delete(el.dataset.id);
     updateSelectedUI();
@@ -1892,6 +1932,38 @@
     updateSelectedUI();
   }
 
+  /* V2.5.8c：查詢預約可用狀態
+   * 單堂課：用課堂時段查一次（與原本相同）
+   * 多堂課：每堂課用自己的時段各查一次，教室取該堂課自己的結果，
+   *         設備取最早那堂課的結果（送出時設備會掛在最早那一筆預約） */
+  function resvAvailabilityRunner() {
+    let ok = () => {}, fail = () => {};
+    const runner = {
+      withSuccessHandler(fn) { ok = fn; return runner; },
+      withFailureHandler(fn) { fail = fn; return runner; },
+      __resvAvailability() {
+        const date = document.getElementById('reserveDate').value;
+        const rc = currentResvCourse();
+        const slots = rc && rc.list.length > 1
+          ? rc.list.map(c => ({ course: c, startTime: c.startTime, endTime: c.endTime }))
+          : [{ course: null, startTime: document.getElementById('reserveStart').value, endTime: document.getElementById('reserveEnd').value }];
+        const ask = slot => new Promise((resolve, reject) => google.script.run
+          .withSuccessHandler(resolve).withFailureHandler(reject)
+          .getReservationAvailabilityV2({ useDate: date, startTime: slot.startTime, endTime: slot.endTime }));
+        Promise.all(slots.map(ask)).then(results => {
+          if (results.length === 1) return ok(results[0]);
+          const rooms = [];
+          results.forEach((r, i) => (r?.rooms || []).forEach(x => { if (x.id === slots[i].course.roomId) rooms.push(x); }));
+          // 同一間教室有兩堂課：任何一堂不可預約就視為不可預約
+          const merged = new Map();
+          rooms.forEach(x => merged.set(x.id, merged.has(x.id) ? { ...x, available: merged.get(x.id).available && x.available } : x));
+          ok({ rooms: [...merged.values()], equipments: results[0]?.equipments || [] });
+        }).catch(err => fail(err));
+      }
+    };
+    return runner;
+  }
+
   function refreshReservationAvailability(showMessage = false) {
     const status = document.getElementById('reserveEquipmentStatus');
     const btn = document.getElementById('reserveInventoryRefreshBtn');
@@ -1912,7 +1984,7 @@
     if (status) status.textContent = '查詢該時段可預約狀態…';
     if (btn) { btn.disabled = true; btn.textContent = '查詢中…'; }
 
-    google.script.run
+    resvAvailabilityRunner()
       .withSuccessHandler(res => {
         if (token !== reserveAvailabilityToken) return;
 
@@ -1968,11 +2040,7 @@
         if (status) status.textContent = '無法取得時段庫存，請稍後再試';
         if (btn) { btn.disabled = false; btn.innerHTML = licon('refresh-cw','licon-sm') + ' 更新'; }
       })
-      .getReservationAvailabilityV2({
-        useDate: document.getElementById('reserveDate').value,
-        startTime: document.getElementById('reserveStart').value,
-        endTime: document.getElementById('reserveEnd').value
-      });
+      .__resvAvailability();
   }
 
   function selectedItems() {
@@ -2121,8 +2189,23 @@
   }
 
   // 切換「上課使用／非課程使用」
+  // V2.5.8d：依已選課程重新帶入鑰匙／遙控器（上課使用時第 3 步的教室項目完全由課程決定）
+  function rebuildCourseRoomAssets() {
+    state.roomKeyIds.clear();
+    state.remoteIds.clear();
+    selectedCoursesFrom(state.courses, state.courseIds).forEach(c => autoSelectCourseRoomKey(c));
+    if (state.assetTab === 'ROOM') renderRooms();
+    updateSelectedUI();
+  }
+
   function setReturnMode(mode) {
+    const prev = state.returnMode;
     state.returnMode = mode === 'OTHER' ? 'OTHER' : 'COURSE';
+    // 切換用途：上課使用→依課程重新帶入；非課程使用→清空，讓學生自己選教室
+    if (prev !== state.returnMode && state.data) {
+      if (state.returnMode === 'COURSE') rebuildCourseRoomAssets();
+      else { state.roomKeyIds.clear(); state.remoteIds.clear(); if (state.assetTab === 'ROOM') renderRooms(); updateSelectedUI(); }
+    }
     document.getElementById('useModeCourse').classList.toggle('is-active', state.returnMode === 'COURSE');
     document.getElementById('useModeOther').classList.toggle('is-active', state.returnMode === 'OTHER');
     document.getElementById('coursePanel').classList.toggle('hidden', state.returnMode !== 'COURSE');
@@ -2130,44 +2213,49 @@
     renderDuePanel();
   }
 
-  // 名冊系所和排課系所的寫法可能不同（例如「資管系助理」），盡量對到同一個系所
-  function matchCourseDept(profileDept) {
-    const list = (state.courses && state.courses.departments) || [];
-    const raw = String(profileDept || '').trim();
-    if (!raw || !list.length) return '';
-    if (list.includes(raw)) return raw;
-    const stripped = raw.replace(/(助理|辦公室|學生)$/,'');
-    if (list.includes(stripped)) return stripped;
-    const hits = list.filter(d => d.slice(0, 2) === stripped.slice(0, 2));
-    return hits.length === 1 ? hits[0] : '';
-  }
 
-  function preselectCourseDept(profileDept) {
-    state.profileDept = profileDept || '';
-    if (!state.courses) return;              // 課程還沒載入，載入後 renderCoursePanel 會再套用
-    const hit = matchCourseDept(state.profileDept);
-    if (hit && !state.courseId) { state.courseDept = hit; renderCoursePanel(); }
-    // 預約課堂也一起預選系所（尚未選課堂時）
-    if (!state.resvCourseId && state.resvCourses) { state.resvDept = ''; renderResvCoursePanel(); }
-  }
-
-  function selectCourseDept(dept) {
-    state.courseDept = dept;
-    state.courseId = '';
-    renderCoursePanel();
-    renderDuePanel();
-  }
-
+  // V2.5.8c：點課程卡片＝加入／取消（可複選）
   function selectCourse(id) {
-    state.courseId = id;
+    const list = (state.courses && state.courses.courses) || [];
+    const c = list.find(x => x.id === id);
+    if (!c) return;
+    if (state.courseIds.includes(id)) {
+      state.courseIds = state.courseIds.filter(x => x !== id);
+      releaseCourseRoomAssets(c);
+    } else {
+      state.courseIds = state.courseIds.concat(id);
+      autoSelectCourseRoomKey(c);
+    }
+    state.courseId = state.courseIds[0] || '';
     renderCoursePanel();
     renderDuePanel();
-    autoSelectCourseRoomKey();
   }
 
-  // 選了課：教室鑰匙可借且還沒選任何教室鑰匙時，幫忙選起來
-  function autoSelectCourseRoomKey() {
-    const c = currentCourse();
+  // 取消一堂課時，順手取消系統替這堂課勾的鑰匙／遙控器（同教室還有其他已選課堂就保留）
+  function releaseCourseRoomAssets(c) {
+    if (!c || !c.roomId) return;
+    const stillUsed = selectedCoursesFrom(state.courses, state.courseIds).some(x => x.roomId === c.roomId);
+    if (stillUsed) return;
+    state.roomKeyIds.delete(c.roomId);
+    state.remoteIds.delete(c.roomId);
+    if (state.assetTab === 'ROOM') renderRooms();
+    updateSelectedUI();
+    const hint = document.getElementById('courseHint');
+    if (hint) { hint.className = 'cds-helper'; hint.textContent = '已取消 ' + (c.classroom || '') + ' 的鑰匙與遙控器。'; }
+  }
+
+  // V2.5.8c：教室的冷氣遙控器是否可以外借
+  // 只有空調方式為「遙控器」的教室才借得到（中控、遙控器在內、無空調、不外借都排除）
+  function roomRemoteLoanable(room) {
+    if (!room || room.noLoan || !room.hasRemote) return false;
+    const mode = room.acControl || '遙控器';
+    return mode === '遙控器';
+  }
+
+  // 選了課：自動帶入該教室的「鑰匙」與「冷氣遙控器」
+  // V2.5.8d：上課使用時學生不能自行點選或取消，避免漏借、工讀生還要手動補
+  function autoSelectCourseRoomKey(course) {
+    const c = course || currentCourse();
     const hint = document.getElementById('courseHint');
     if (!c || !hint) return;
     hint.className = 'cds-helper';
@@ -2175,22 +2263,137 @@
     if (!c.roomId || !state.data) return;
     const room = (state.data.rooms || []).find(r => r.id === c.roomId);
     if (!room) return;
-    if (state.roomKeyIds.has(room.id)) return;
-    if (state.roomKeyIds.size) { hint.textContent = '提醒：你選的物品不是 ' + room.name + ' 的鑰匙，請確認。'; return; }
-    if (room.hasKey && room.keyAvailable && !room.noLoan) {
-      state.roomKeyIds.add(room.id);
-      if (state.assetTab === 'ROOM') renderRooms();
-      updateSelectedUI();
-      hint.textContent = '已幫你選取 ' + room.name + ' 的教室鑰匙，可在第 3 步更改。';
-    } else if (room.hasKey && !room.keyAvailable) {
-      hint.className = 'cds-helper is-error';
-      hint.textContent = room.name + ' 的鑰匙目前借出中，請洽院辦。';
+    // V2.5.8c：可複選多堂課，每堂課的教室都各自勾選（不再因已選別間教室而略過）
+
+    const picked = [];   // 這次幫忙勾的項目
+    const busy = [];     // 借出中、無法勾選的項目
+    // 1) 教室鑰匙
+    if (room.hasKey && !room.noLoan) {
+      if (state.roomKeyIds.has(room.id)) picked.push('鑰匙');
+      else if (room.keyAvailable) { state.roomKeyIds.add(room.id); picked.push('鑰匙'); }
+      else busy.push('鑰匙');
     }
+    // 2) 冷氣遙控器
+    if (roomRemoteLoanable(room)) {
+      const remoteLabel = state.data?.acRemoteLabel || '冷氣遙控器';
+      if (state.remoteIds.has(room.id)) picked.push(remoteLabel);
+      else if (room.remoteAvailable) { state.remoteIds.add(room.id); picked.push(remoteLabel); }
+      else busy.push(remoteLabel);
+    }
+
+    if (state.assetTab === 'ROOM') renderRooms();
+    updateSelectedUI();
+    const parts = [];
+    if (picked.length) parts.push('系統已帶入 ' + room.name + ' 的' + picked.join('與') + '。');
+    if (busy.length) { hint.className = 'cds-helper is-error'; parts.push(room.name + ' 的' + busy.join('與') + '目前借出中，請洽院辦。'); }
+    hint.textContent = parts.join(' ');
   }
 
+  /* V2.5.8c：複選課堂
+   * selectedCoursesFrom：依勾選順序取出課程物件
+   * mergeCourses：把多堂課合併成一個「虛擬課程」給畫面顯示用
+   *   startTime＝最早開始、endTime＝最晚下課（歸還期限依最晚下課計算）、roomIds＝所有教室 */
+  function selectedCoursesFrom(data, ids) {
+    const list = (data && data.courses) || [];
+    return (ids || []).map(id => list.find(c => c.id === id)).filter(Boolean)
+      .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
+  }
+  function mergeCourses(list) {
+    if (!list.length) return null;
+    if (list.length === 1) return Object.assign({}, list[0], { ids: [list[0].id], roomIds: list[0].roomId ? [list[0].roomId] : [], list });
+    return {
+      id: list.map(c => c.id).join(','),
+      ids: list.map(c => c.id),
+      list,
+      title: list.map(c => c.title).join('、'),
+      classroom: [...new Set(list.map(c => c.classroom).filter(Boolean))].join('、'),
+      department: [...new Set(list.map(c => c.department).filter(Boolean))].join('、'),
+      startTime: list.map(c => c.startTime).sort()[0],
+      endTime: list.map(c => c.endTime).sort().pop(),
+      roomId: list.find(c => c.roomId)?.roomId || '',
+      roomIds: [...new Set(list.map(c => c.roomId).filter(Boolean))]
+    };
+  }
   function currentCourse() {
-    const list = (state.courses && state.courses.courses) || [];
-    return list.find(c => c.id === state.courseId) || null;
+    return mergeCourses(selectedCoursesFrom(state.courses, state.courseIds));
+  }
+
+  // 已選課堂的小標籤列（可點 × 取消），讓學生切換篩選後仍看得到自己選了哪些課
+  function selectedCourseChipsHtml(list, removeFn) {
+    if (!list.length) return '';
+    return `<div class="course-chips"><span>已選 ${list.length} 堂：</span>` + list.map(c =>
+      `<button type="button" data-id="${escapeAttr(c.id)}" onclick="${removeFn}(this.dataset.id)" title="取消這堂課">${escapeHtml(c.classroom || '--')} ${escapeHtml(c.title)} ✕</button>`).join('') + '</div>';
+  }
+
+  /* =====================================================
+   * V2.5.8c：課程篩選（依系所／依教室／顯示全部）
+   * 立即借用（NOW）與提前預約（RESV）共用
+   * ===================================================== */
+
+  // 取出課程清單中所有教室（依教室代號自然排序，例如 B11、B12、R268）
+  function courseClassrooms(data) {
+    const set = new Set(((data && data.courses) || []).map(c => String(c.classroom || '').trim()).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true }));
+  }
+
+  // 依篩選方式取出要顯示的課程；全部模式依開始時間、教室排序
+  function filterCoursesBy(data, mode, value) {
+    const list = (data && data.courses) || [];
+    if (mode === 'ALL') {
+      return list.slice().sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)) ||
+        String(a.classroom || '').localeCompare(String(b.classroom || ''), 'zh-Hant', { numeric: true }));
+    }
+    if (!value) return [];
+    // 依教室：只列該教室的課，依開始時間排序
+    return list.filter(c => String(c.classroom || '').trim() === value)
+      .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
+  }
+
+  // 課程卡片：顯示排課系統登錄的系所原文（只供辨認，不做比對）
+  function courseTileHtml(c, selectedIds, mode, onclickFn) {
+    const dept = c.department ? escapeHtml(c.department) + '｜' : '';
+    const on = Array.isArray(selectedIds) ? selectedIds.includes(c.id) : selectedIds === c.id;
+    return `<button type="button" class="course-tile ${on ? 'is-selected' : ''}"
+        data-id="${escapeAttr(c.id)}" onclick="${onclickFn}(this.dataset.id)">
+        <b>${escapeHtml(c.title)}</b>
+        <span>${dept}${escapeHtml(c.classroom || '--')}｜${escapeHtml(c.startTime)}～${escapeHtml(c.endTime)}${c.person ? '｜' + escapeHtml(c.person) : ''}</span>
+      </button>`;
+  }
+
+  // 切換篩選方式：已選的課如果在新的篩選結果裡就保留，否則清除
+  function setCourseFilter(kind, mode) {
+    const isNow = kind === 'NOW';
+    if (isNow) state.courseFilter = mode; else state.resvFilter = mode;
+    document.querySelectorAll(isNow ? '.course-filter-btn' : '.resv-filter-btn')
+      .forEach(b => b.classList.toggle('is-active', b.dataset.filter === mode));
+    // V2.5.8c：可複選，切換篩選方式時保留已選課堂（上方標籤列會顯示）
+    if (isNow) { renderCoursePanel(); renderDuePanel(); }
+    else renderResvCoursePanel();
+  }
+
+  // 教室下拉選單改變
+  function onCourseFilterValue(kind, value) {
+    if (kind === 'NOW') { state.courseRoom = value; renderCoursePanel(); }
+    else { state.resvRoom = value; renderResvCoursePanel(); }
+  }
+
+  // 依模式更新標籤與下拉選單；回傳目前的篩選值（全部模式回傳空字串並隱藏下拉）
+  function renderCourseFilterSelect(kind, data) {
+    const isNow = kind === 'NOW';
+    const mode = isNow ? state.courseFilter : state.resvFilter;
+    const sel = document.getElementById(isNow ? 'courseDept' : 'resvCourseDept');
+    const field = document.getElementById(isNow ? 'courseFilterField' : 'resvFilterField');
+    const label = document.getElementById(isNow ? 'courseFilterLabel' : 'resvFilterLabel');
+    if (field) field.classList.toggle('hidden', mode === 'ALL');
+    if (mode === 'ALL') return '';
+    const rooms = courseClassrooms(data);
+    let room = isNow ? state.courseRoom : state.resvRoom;
+    if (room && !rooms.includes(room)) room = '';
+    if (isNow) state.courseRoom = room; else state.resvRoom = room;
+    if (label) label.textContent = '教室 *';
+    sel.innerHTML = '<option value="">請選擇教室</option>' + rooms.map(r => `<option value="${escapeAttr(r)}">${escapeHtml(r)}</option>`).join('');
+    sel.value = room;
+    return room;
   }
 
   function renderCoursePanel() {
@@ -2210,19 +2413,14 @@
     }
 
     sel.disabled = false;
-    if (!state.courseDept) state.courseDept = matchCourseDept(state.profileDept);
-    if (state.courseDept && !data.departments.includes(state.courseDept)) state.courseDept = '';
-    sel.innerHTML = '<option value="">請選擇系所</option>' +
-      data.departments.map(d => `<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
-    sel.value = state.courseDept || '';
-
-    if (!state.courseDept) { listBox.innerHTML = '<p class="cds-helper">請先選擇系所</p>'; return; }
-    const courses = data.courses.filter(c => (c.depts || [c.department]).includes(state.courseDept));
-    listBox.innerHTML = courses.map(c => `<button type="button" class="course-tile ${state.courseId === c.id ? 'is-selected' : ''}"
-        data-id="${escapeAttr(c.id)}" onclick="selectCourse(this.dataset.id)">
-        <b>${escapeHtml(c.title)}</b>
-        <span>${escapeHtml(c.classroom || '--')}｜${escapeHtml(c.startTime)}～${escapeHtml(c.endTime)}${c.person ? '｜' + escapeHtml(c.person) : ''}</span>
-      </button>`).join('') + '<p class="cds-helper">找不到你的課？可能是補課或換教室，請改選「非課程使用」。</p>';
+    // V2.5.8c：依篩選方式產生下拉選單與課程清單
+    const mode = state.courseFilter;
+    const value = renderCourseFilterSelect('NOW', data);
+    const chips = selectedCourseChipsHtml(selectedCoursesFrom(data, state.courseIds), 'selectCourse');
+    if (mode !== 'ALL' && !value) { listBox.innerHTML = chips + '<p class="cds-helper">請先選擇教室，或切到「顯示全部」</p>'; return; }
+    const courses = filterCoursesBy(data, mode, value);
+    listBox.innerHTML = chips + courses.map(c => courseTileHtml(c, state.courseIds, mode, 'selectCourse')).join('') +
+      '<p class="cds-helper">要借好幾間教室？可以點選多堂課。找不到你的課？切到「顯示全部」找找看；可能是補課或換教室，請改選「非課程使用」。</p>';
   }
 
   // 上課使用：下課時間＋緩衝分鐘（只用來顯示，正式到期時間由後端計算）
@@ -2246,8 +2444,9 @@
     if (isCourse) {
       const c = currentCourse();
       const after = (state.courses && state.courses.dropboxAfter) || '17:00';
+      const multi = c && c.ids.length > 1;
       courseBox.innerHTML = c
-        ? `<b>今天 ${escapeHtml(courseDueText(c))} 前歸還${c.endTime > after ? '（投入歸還箱）' : ''}</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${escapeHtml(c.endTime)} 下課，下課後 ${buf} 分鐘內${c.endTime > after ? `；${escapeHtml(after)} 後院辦已下班，請把借用品投入歸還箱` : ''}</p>`
+        ? `<b>今天 ${escapeHtml(courseDueText(c))} 前歸還${c.endTime > after ? '（投入歸還箱）' : ''}</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${multi ? '最後一堂 ' : ''}${escapeHtml(c.endTime)} 下課，下課後 ${buf} 分鐘內${multi ? '一起歸還' : ''}${c.endTime > after ? `；${escapeHtml(after)} 後院辦已下班，請把借用品投入歸還箱` : ''}</p>`
         : '<b>請先在第 2 步選擇課程</b><p>選好課程後，這裡會顯示歸還期限</p>';
     } else {
       document.getElementById('dueDateInput').value = state.dueDate ? state.dueDate.replace(/-/g, '/') : '';
@@ -2374,7 +2573,7 @@
   // 送出前檢查預計歸還；回傳錯誤訊息，空字串表示通過
   function validateReturnPlan() {
     if (state.returnMode === 'COURSE') {
-      if (!state.courseId) return '請在第 2 步選擇今天的課程，或改選「非課程使用」。';
+      if (!state.courseIds.length) return '請在第 2 步選擇今天的課程，或改選「非課程使用」。';
       return '';
     }
     if (!state.dueDate) { document.getElementById('dueDateInput').classList.add('is-invalid'); return '請選擇歸還日期。'; }
@@ -2385,7 +2584,7 @@
 
   function returnPayload() {
     return state.returnMode === 'COURSE'
-      ? { courseId: state.courseId }
+      ? { courseIds: state.courseIds.slice(), courseId: state.courseIds[0] || '' }
       : { dueDate: state.dueDate, dueTime: state.dueTime };
   }
 
@@ -2394,7 +2593,7 @@
     if (state.returnMode === 'COURSE') {
       const c = currentCourse();
       const after = (state.courses && state.courses.dropboxAfter) || '17:00';
-      return c ? `今天 ${courseDueText(c)} 前（${c.title}，${c.endTime} 下課${c.endTime > after ? '，投入歸還箱' : ''}）` : '';
+      return c ? `今天 ${courseDueText(c)} 前（${c.title}，${c.ids.length > 1 ? '最後一堂 ' : ''}${c.endTime} 下課${c.endTime > after ? '，投入歸還箱' : ''}）` : '';
     }
     return `${state.dueDate.replace(/-/g, '/')} ${state.dueTime} 前（非課程使用）`;
   }
@@ -2423,26 +2622,27 @@
 
   function onReserveDateChange() {
     state.resvCourseId = '';
+    state.resvCourseIds = [];   // V2.5.8c：換日期清掉所有已選課堂
     applyResvCourse();
     loadResvCourses();
   }
 
   function currentResvCourse() {
-    const list = (state.resvCourses && state.resvCourses.courses) || [];
-    return list.find(c => c.id === state.resvCourseId) || null;
+    return mergeCourses(selectedCoursesFrom(state.resvCourses, state.resvCourseIds));
   }
 
-  function selectResvDept(dept) {
-    state.resvDept = dept;
-    state.resvCourseId = '';
-    renderResvCoursePanel();
-    applyResvCourse();
-  }
 
+  // V2.5.8c：點課堂卡片＝加入／取消（可複選，送出時每堂課拆成一筆預約）
   function selectResvCourse(id) {
-    state.resvCourseId = id;
+    const list = (state.resvCourses && state.resvCourses.courses) || [];
+    const c = list.find(x => x.id === id);
+    if (!c) return;
+    let added = null;
+    if (state.resvCourseIds.includes(id)) state.resvCourseIds = state.resvCourseIds.filter(x => x !== id);
+    else { state.resvCourseIds = state.resvCourseIds.concat(id); added = c; }
+    state.resvCourseId = state.resvCourseIds[0] || '';
     renderResvCoursePanel();
-    applyResvCourse();
+    applyResvCourse(added);
   }
 
   function renderResvCoursePanel() {
@@ -2457,40 +2657,42 @@
       return;
     }
     sel.disabled = false;
-    if (!state.resvDept) {
-      const prof = state.profileDept || '';
-      const list = data.departments;
-      state.resvDept = list.includes(prof) ? prof : (list.find(d => d.slice(0, 2) === prof.replace(/(助理|辦公室|學生)$/,'').slice(0, 2)) || '');
-    }
-    if (state.resvDept && !data.departments.includes(state.resvDept)) state.resvDept = '';
-    sel.innerHTML = '<option value="">請選擇系所</option>' + data.departments.map(d => `<option value="${escapeAttr(d)}">${escapeHtml(d)}</option>`).join('');
-    sel.value = state.resvDept || '';
-    if (!state.resvDept) { box.innerHTML = '<p class="cds-helper">請先選擇系所</p>'; return; }
-    const courses = data.courses.filter(c => (c.depts || [c.department]).includes(state.resvDept));
-    box.innerHTML = courses.map(c => `<button type="button" class="course-tile ${state.resvCourseId === c.id ? 'is-selected' : ''}"
-        data-id="${escapeAttr(c.id)}" onclick="selectResvCourse(this.dataset.id)">
-        <b>${escapeHtml(c.title)}</b>
-        <span>${escapeHtml(c.classroom || '--')}｜${escapeHtml(c.startTime)}～${escapeHtml(c.endTime)}${c.person ? '｜' + escapeHtml(c.person) : ''}</span>
-      </button>`).join('') + '<p class="cds-helper">找不到你的課堂？請洽院辦確認是否已登錄排課系統。</p>';
+    // V2.5.8c：依篩選方式產生下拉選單與課堂清單
+    const mode = state.resvFilter;
+    const value = renderCourseFilterSelect('RESV', data);
+    const chips = selectedCourseChipsHtml(selectedCoursesFrom(data, state.resvCourseIds), 'selectResvCourse');
+    if (mode !== 'ALL' && !value) { box.innerHTML = chips + '<p class="cds-helper">請先選擇教室，或切到「顯示全部」</p>'; return; }
+    const courses = filterCoursesBy(data, mode, value);
+    box.innerHTML = chips + courses.map(c => courseTileHtml(c, state.resvCourseIds, mode, 'selectResvCourse')).join('') +
+      '<p class="cds-helper">要預約好幾間教室？可以點選多堂課，送出後每堂課各成立一筆預約。找不到你的課堂？切到「顯示全部」找找看；仍找不到請洽院辦確認是否已登錄排課系統。</p>';
   }
 
   // 依課堂鎖定開始／結束時間、教室與歸還時間
-  function applyResvCourse() {
+  // added：這次新加入的課堂（只替它自動勾鑰匙／遙控器，不會把學生取消的項目加回來）
+  function applyResvCourse(added) {
     const c = currentResvCourse();
     const startSel = document.getElementById('reserveStart');
     const endSel = document.getElementById('reserveEnd');
     const dueBox = document.getElementById('resvDueBox');
-    // 教室只能是課堂所在教室：先清掉其他教室的選取
-    [state.reserveRoomKeyIds, state.reserveRemoteIds].forEach(set => [...set].forEach(id => { if (!c || id !== c.roomId) set.delete(id); }));
+    // 教室只能是所選課堂的教室：先清掉其他教室的選取
+    [state.reserveRoomKeyIds, state.reserveRemoteIds].forEach(set => [...set].forEach(id => { if (!c || !c.roomIds.includes(id)) set.delete(id); }));
     renderReservationTimeSelects(false);
     applyResvReturnMethodLock();
     if (!c) {
       if (dueBox) dueBox.innerHTML = '<b>請先在第 2 步選擇課堂</b><p>選好課堂後，這裡會顯示歸還時間</p>';
     } else {
-      // 課堂教室有鑰匙就預先勾選（之後仍會依時段確認是否可預約）
-      const room = (state.data?.rooms || []).find(r => r.id === c.roomId);
-      if (room && room.hasKey && !room.noLoan) state.reserveRoomKeyIds.add(room.id);
-      if (dueBox) dueBox.innerHTML = `<b>${escapeHtml(resvDueText())}</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${escapeHtml(c.endTime)} 結束，結束後 ${Number(state.resvCourses?.bufferMin) || 30} 分鐘內歸還</p>`;
+      // 課堂教室的鑰匙與冷氣遙控器都預先勾選（之後仍會依時段確認是否可預約）
+      // 學生不需要遙控器時，可在第 3 步自行取消勾選
+      // V2.5.8d：依所有已選課堂帶入鑰匙與遙控器（學生不能取消；時段衝突的會在查詢後自動移除）
+      c.list.forEach(x => {
+        const room = (state.data?.rooms || []).find(r => r.id === x.roomId);
+        if (room && room.hasKey && !room.noLoan) state.reserveRoomKeyIds.add(room.id);
+        if (roomRemoteLoanable(room)) state.reserveRemoteIds.add(room.id);
+      });
+      const buf = Number(state.resvCourses?.bufferMin) || 30;
+      if (dueBox) dueBox.innerHTML = c.list.length > 1
+        ? `<b>共 ${c.list.length} 堂，每堂各自歸還</b>` + c.list.map(x => `<p>${escapeHtml(x.classroom)} ${escapeHtml(x.title)}：${escapeHtml(x.startTime)}～${escapeHtml(x.endTime)}，${escapeHtml(resvDueText(x))}歸還</p>`).join('')
+        : `<b>${escapeHtml(resvDueText())}</b><p>${escapeHtml(c.title)}（${escapeHtml(c.classroom)}）${escapeHtml(c.endTime)} 結束，結束後 ${buf} 分鐘內歸還</p>`;
     }
     refreshReservationAvailability();
   }
@@ -2501,7 +2703,9 @@
     if (!sel) return;
     const c = currentResvCourse();
     const after = (state.resvCourses && state.resvCourses.dropboxAfter) || '17:00';
-    const lock = !!(c && c.endTime > after);
+    // V2.5.8c：多堂課時，全部都晚於下班時間才整個鎖定；只有部分晚於時，那幾筆由後端自動設為歸還箱
+    const late = c ? c.list.filter(x => x.endTime > after) : [];
+    const lock = !!(c && late.length === c.list.length);
     if (lock) {
       if (![...sel.options].some(o => o.value === '歸還箱')) sel.insertAdjacentHTML('beforeend', '<option value="歸還箱">歸還箱</option>');
       sel.value = '歸還箱';
@@ -2513,11 +2717,12 @@
     sel.disabled = lock;
     let hint = document.getElementById('resvMethodHint');
     if (!hint) { sel.parentElement.insertAdjacentHTML('afterend', '<p id="resvMethodHint" class="cds-helper"></p>'); hint = document.getElementById('resvMethodHint'); }
-    hint.textContent = lock ? `課堂 ${c.endTime} 結束，${after} 後院辦已下班，一律投入歸還箱。` : '';
+    hint.textContent = lock ? `課堂 ${c.endTime} 結束，${after} 後院辦已下班，一律投入歸還箱。`
+      : (late.length ? `${late.map(x => x.classroom + ' ' + x.title).join('、')} 在 ${after} 後結束，這幾堂會自動設為「歸還箱」；上方選的方式只套用其他課堂。` : '');
   }
 
-  function resvDueText() {
-    const c = currentResvCourse();
+  function resvDueText(one) {
+    const c = one || currentResvCourse();
     if (!c) return '';
     const date = document.getElementById('reserveDate')?.value || '';
     const buf = Number(state.resvCourses?.bufferMin) || 30;
@@ -2528,7 +2733,7 @@
 
   function commonPayload() { return { studentId:document.getElementById('studentId').value.trim(), studentName:document.getElementById('studentName').value.trim(), phone:document.getElementById('phone').value.trim(), department:document.getElementById('department').value.trim() }; }
   function borrowPayload() { return { ...commonPayload(), ...returnPayload(), note:document.getElementById('borrowNote').value.trim(), roomKeyIds:[...state.roomKeyIds], remoteIds:[...state.remoteIds], equipmentItems:[...state.equipmentQty.entries()].map(([id,qty]) => ({id,qty})) }; }
-  function reservePayload() { return { ...commonPayload(), roomKeyIds:[...state.reserveRoomKeyIds], remoteIds:[...state.reserveRemoteIds], equipmentItems:[...state.reserveEquipmentQty.entries()].map(([id,qty])=>({id,qty})), useDate:document.getElementById('reserveDate').value, startTime:document.getElementById('reserveStart').value, endTime:document.getElementById('reserveEnd').value, returnMethod:document.getElementById('reserveReturnMethod').value, courseId:state.resvCourseId, note:document.getElementById('reserveNote').value.trim() }; }
+  function reservePayload() { return { ...commonPayload(), roomKeyIds:[...state.reserveRoomKeyIds], remoteIds:[...state.reserveRemoteIds], equipmentItems:[...state.reserveEquipmentQty.entries()].map(([id,qty])=>({id,qty})), useDate:document.getElementById('reserveDate').value, startTime:document.getElementById('reserveStart').value, endTime:document.getElementById('reserveEnd').value, returnMethod:document.getElementById('reserveReturnMethod').value, courseIds:state.resvCourseIds.slice(), courseId:state.resvCourseIds[0] || '', note:document.getElementById('reserveNote').value.trim() }; }
 
   function validateCommon(p) {
     const missing=[]; if(!p.studentId)missing.push('學號 / 員編'); if(!p.studentName)missing.push('姓名'); if(!p.phone)missing.push('聯絡電話'); if(!p.department)missing.push('系所 / 單位');
@@ -2674,7 +2879,7 @@
       document.getElementById('successText').textContent = `共 ${res.lineCount || 0} 種，${res.totalUnits || 0} 件/單位`;
       document.getElementById('successInfo').innerHTML = `<p class="text-[10px] text-slate-400 font-bold">借用單號</p><p class="font-mono text-xs font-bold break-all">${escapeHtml(res.loanId||'')}</p><p class="mt-3 text-[10px] text-slate-400 font-bold">預計歸還</p><p class="font-black">${escapeHtml(res.expectedReturn||'')}</p>`;
     } else {
-      document.getElementById('successTitle').textContent = '提前預約成功';
+      document.getElementById('successTitle').textContent = res.multi ? `提前預約成功（共 ${res.count} 筆）` : '提前預約成功';
       document.getElementById('successText').textContent = `${res.itemSummary || '預約已建立'} · ${res.useDate || ''}`;
       document.getElementById('successInfo').innerHTML = `<p class="text-[10px] text-slate-400 font-bold">預約編號</p><p class="font-mono text-xs font-bold break-all">${escapeHtml(res.reservationId||'')}</p><p class="mt-3 text-[10px] text-slate-400 font-bold">使用時段</p><p class="font-black">${escapeHtml(res.startTime||'')}–${escapeHtml(res.endTime||'')}</p>${res.returnMethod&&res.returnMethod!=='--'?`<p class="mt-3 text-[10px] text-slate-400 font-bold">歸還方式</p><p class="font-black">${escapeHtml(res.returnMethod)}</p>`:''}${res.returnTime&&res.returnTime!=='--'?`<p class="mt-3 text-[10px] text-slate-400 font-bold">歸還時間</p><p class="font-black">${escapeHtml(res.returnTime)}</p>`:''}`;
     }
@@ -2700,6 +2905,7 @@
     state.equipmentQty.clear();
     state.returnTime = '';
     state.courseId = '';
+    state.courseIds = [];
     state.dueDate = '';
     state.dueTime = '';
     state.returnMode = 'COURSE';

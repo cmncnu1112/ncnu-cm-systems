@@ -49,12 +49,15 @@
     /* V2.5.8e：關閉「點兩下放大」。連續按設備數量的 ＋／－ 時，iPhone 會把兩次點擊當成雙擊而放大畫面；
        manipulation 只取消雙擊縮放，仍保留雙指縮放（方便需要放大字體的人），也讓點擊不再有 300ms 延遲 */
     html, body, * { touch-action: manipulation; }
-    /* V2.5.9：中／EN 切換按鈕 */
-    .lang-toggle{height:40px;padding:0 12px;border-radius:16px;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
-    .lang-toggle:active{transform:scale(.95);}
-    .lang-toggle .lang-on{color:#1e3a8a;}
-    .lang-toggle .lang-off{color:#94a3b8;font-weight:500;}
-    .lang-toggle .lang-sep{margin:0 3px;color:#cbd5e1;font-weight:400;}
+    /* V2.5.9：中／EN 切換按鈕，Carbon 分段切換樣式（直角、與重新整理按鈕同高 40px、同底色 #e8e8e8）
+       目前語言那一格填深藍 #1e3a8a 白字，另一格灰字；整顆都可點，點一下就切換 */
+    .lang-toggle{display:inline-flex;align-items:stretch;height:40px;padding:0;border:0;border-radius:0;background:#e8e8e8;cursor:pointer;}
+    .lang-toggle > span{display:flex;align-items:center;justify-content:center;width:40px;padding:0;font-size:13px;font-weight:600;line-height:1;transition:background .15s,color .15s;}
+    .lang-toggle .lang-on{background:#1e3a8a;color:#fff;}
+    .lang-toggle .lang-off{background:transparent;color:#525252;}
+    .lang-toggle:hover .lang-off{background:#d1d1d1;color:#161616;}
+    .lang-toggle .lang-sep{display:none;}
+    .lang-toggle:focus-visible{outline:2px solid #1e3a8a;outline-offset:2px;}
     html { -webkit-tap-highlight-color: transparent; }
     body {
       font-family: "Microsoft JhengHei", "微軟正黑體", ui-sans-serif, system-ui,
@@ -1496,6 +1499,7 @@
     box.innerHTML = list.map(equipmentCardHtml).join('');
   }
 
+  // V2.5.9：設備卡片一律撐滿格子高度（h-full），同一列的方格等高；狀態列與 ＋／－ 列靠下對齊
   function equipmentCardHtml(item) {
     const qty = state.equipmentQty.get(item.id) || 0;
     const isQty = item.manageMode === '數量' || Number(item.stockQty || 0) > 1;
@@ -1505,15 +1509,15 @@
       const domId = 'eq_' + safeDomId(item.id);
       const stockText = item.available ? `可借 ${item.availableQty} / ${item.stockQty} ${unit}` : `可借 0 / ${item.stockQty} ${unit}`;
       const stockClass = item.available ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700';
-      return `<div>
+      return `<div class="h-full">
         <input class="asset-input sr-only" type="checkbox" id="${domId}" data-id="${escapeAttr(item.id)}" ${qty > 0 ? 'checked' : ''} ${item.available ? '' : 'disabled'} onchange="toggleSingleEquipment(this)">
-        <label for="${domId}" class="relative block min-h-[100px] rounded-2xl border ${item.available ? 'border-slate-200 bg-white cursor-pointer' : 'border-rose-100 bg-rose-50/40 cursor-not-allowed'} px-3 py-3 transition">
+        <label for="${domId}" class="relative flex flex-col h-full min-h-[100px] rounded-2xl border ${item.available ? 'border-slate-200 bg-white cursor-pointer' : 'border-rose-100 bg-rose-50/40 cursor-not-allowed'} px-3 py-3 transition">
           <span class="check-dot absolute top-2 right-2 w-5 h-5 rounded-circle bg-teal-600 text-white text-[10px] flex items-center justify-center opacity-0 scale-75">${licon('check','licon-sm')}</span>
           <div class="pr-6">
             <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
             <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.category)}</p>
           </div>
-          <div class="mt-3 flex items-center justify-between gap-2">
+          <div class="mt-auto pt-3 flex items-center justify-between gap-2">
             <span class="text-[9px] px-2 py-1 rounded-full ${stockClass} font-black">${stockText}</span>
             <span class="text-[10px] ${item.available ? 'text-emerald-600' : 'text-rose-600'} font-black">${item.available ? '現在可借' : '目前無法借出'}</span>
           </div>
@@ -1527,7 +1531,7 @@
     const cardClass = noStock ? 'border-rose-100 bg-rose-50/40' : (qty > 0 ? 'border-teal-500 bg-teal-50/40' : 'border-slate-200 bg-white');
     const stateText = noStock ? '目前無庫存' : (low ? '庫存較少' : '現在可借');
 
-    return `<div class="rounded-2xl border ${cardClass} p-3">
+    return `<div class="h-full flex flex-col rounded-2xl border ${cardClass} p-3">
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
           <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
@@ -1877,16 +1881,16 @@
       const badgeText = ready ? `可預約 ${availableQty} / ${item.stockQty} ${unit}` : `總庫存 ${item.stockQty} ${unit}`;
       const badgeClass = available ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700';
       const disabled = !available && qty <= 0;
-      return `<div>
+      return `<div class="h-full">
         <input class="reserve-asset-input sr-only" type="checkbox" id="${domId}" data-id="${escapeAttr(item.id)}"
           ${qty > 0 ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="toggleSingleReservationEquipment(this)">
-        <label for="${domId}" class="relative block min-h-[100px] rounded-2xl border ${available || qty > 0 ? 'border-slate-200 bg-white cursor-pointer' : 'border-rose-100 bg-rose-50/40 cursor-not-allowed'} px-3 py-3 transition">
+        <label for="${domId}" class="relative flex flex-col h-full min-h-[100px] rounded-2xl border ${available || qty > 0 ? 'border-slate-200 bg-white cursor-pointer' : 'border-rose-100 bg-rose-50/40 cursor-not-allowed'} px-3 py-3 transition">
           <span class="check-dot absolute top-2 right-2 w-5 h-5 rounded-circle bg-indigo-600 text-white text-[10px] flex items-center justify-center opacity-0 scale-75">${licon('check','licon-sm')}</span>
           <div class="pr-6">
             <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>
             <p class="mt-1 text-[10px] text-slate-400">${escapeHtml(item.category)}</p>
           </div>
-          <div class="mt-3 flex items-center justify-between gap-2">
+          <div class="mt-auto pt-3 flex items-center justify-between gap-2">
             <span class="text-[9px] px-2 py-1 rounded-full ${badgeClass} font-black">${escapeHtml(badgeText)}</span>
             <span class="text-[10px] ${available ? 'text-indigo-600' : 'text-rose-600'} font-black">${ready ? (available ? '該時段可預約' : '該時段已滿') : '選時段後確認'}</span>
           </div>
@@ -1899,7 +1903,7 @@
     const cardClass = noStock && qty <= 0 ? 'border-rose-100 bg-rose-50/40' : (qty > 0 ? 'border-indigo-500 bg-indigo-50/40' : 'border-slate-200 bg-white');
     const badgeText = ready ? `可預約 ${availableQty} / ${item.stockQty} ${unit}` : `總庫存 ${item.stockQty} ${unit}`;
 
-    return `<div class="rounded-2xl border ${cardClass} p-3">
+    return `<div class="h-full flex flex-col rounded-2xl border ${cardClass} p-3">
       <div class="flex items-start justify-between gap-2">
         <div class="min-w-0">
           <p class="text-sm font-black truncate">${escapeHtml(item.displayName)}</p>

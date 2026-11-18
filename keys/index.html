@@ -424,7 +424,8 @@
               <span class="absolute left-3.5 top-3 text-slate-400"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg></span>
             </div>
             <div id="equipmentCategories" class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-1"></div>
-            <div id="equipmentList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"><div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">載入設備中…</div></div>
+            <!-- V2.5.9：grid-auto-rows:1fr 讓所有設備方格（單欄或雙欄）完全一樣高 -->
+            <div id="equipmentList" class="grid grid-cols-1 sm:grid-cols-2 gap-2" style="grid-auto-rows:1fr"><div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">載入設備中…</div></div>
           </div>
         </section>
 
@@ -552,7 +553,8 @@
               <span class="absolute left-3.5 top-3 text-slate-400"><svg class="licon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg></span>
             </div>
             <div id="reserveEquipmentCategories" class="flex gap-2 overflow-x-auto hide-scrollbar pb-2 mb-1"></div>
-            <div id="reserveEquipmentList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"><div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">載入設備中…</div></div>
+            <!-- V2.5.9：grid-auto-rows:1fr 讓所有設備方格（單欄或雙欄）完全一樣高 -->
+            <div id="reserveEquipmentList" class="grid grid-cols-1 sm:grid-cols-2 gap-2" style="grid-auto-rows:1fr"><div class="sm:col-span-2 text-center py-8 text-xs text-slate-400">載入設備中…</div></div>
           </div>
         </section>
 

@@ -729,7 +729,8 @@
       <h2 id="successTitle" class="mt-5 text-2xl font-black text-emerald-800">登記成功</h2>
       <p id="successText" class="mt-2 text-sm text-emerald-700"></p>
       <div id="successInfo" class="mt-5 rounded-2xl bg-slate-50 border border-slate-200 p-4 text-left text-sm"></div>
-      <button onclick="resetForNext()" class="mt-5 w-full py-3.5 rounded-2xl bg-emerald-600 text-white font-black">再登記一筆</button>
+      <!-- V2.5.10：登記完成只留「確認」，按下後清空整張表單（含借用人資料），下一位使用者看不到上一位的資料 -->
+      <button onclick="confirmSuccess()" class="mt-5 w-full py-3.5 rounded-2xl bg-emerald-600 text-white font-black">確認</button>
     </div>
   </div>
 
@@ -2901,6 +2902,32 @@
   }
 
 
+  /* V2.5.10：登記成功後按「確認」
+     1. 清空借用人資料（學號、姓名、電話、系所、查詢狀態、黑名單提醒、紀錄查詢欄位）
+     2. 再用原本的 resetForNext() 清空本次借用／預約內容並重新抓庫存
+     3. 若本頁嵌在觸控看板（classroom/display.html）的抽屜裡，通知看板收起抽屜
+        （postMessage 只送給同一網域；在 GAS 網址開啟時父頁不同網域，訊息會被瀏覽器丟棄，不影響） */
+  function confirmSuccess() {
+    studentLookupToken++;          // 讓還沒回來的學號查詢結果失效
+    studentLookupBusy = false;
+    studentLookupLastId = '';
+    studentProfileOwnerId = '';
+    studentMemoryCache.clear();    // 公用電腦不保留查過的名冊資料
+    const sid = document.getElementById('studentId');
+    if (sid) sid.value = '';
+    clearBorrowerProfileFields();
+    setBlacklistNotice(false);
+    const status = document.getElementById('studentStatus');
+    if (status) { status.textContent = ''; status.className = 'mt-1.5 text-[11px] min-h-[16px] text-slate-400'; }
+    syncHistoryIdentityFromBorrower('', true);
+    resetForNext();
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'keys-kiosk-done' }, location.origin);
+      }
+    } catch (e) { /* 不同網域時忽略 */ }
+  }
+
   function resetForNext() {
     // 「再登記一筆」只清除本次借用 / 預約內容，保留借用人資料。
     // 學號、姓名、電話、系所，以及已查到的名冊狀態都不清空。
@@ -3075,7 +3102,7 @@
       '確認送出': 'Submit', '確認內容': 'Confirm', '最後確認一次再送出': 'Please check once more before submitting',
       '返回修改': 'Go back', '送出中…': 'Submitting…', '送出失敗': 'Submission failed',
       '確認借用內容': 'Confirm your loan', '確認提前預約': 'Confirm your reservation', '確認預約': 'Confirm reservation',
-      '登記成功': 'Done', '借用登記成功': 'Loan registered', '再登記一筆': 'Register another',
+      '登記成功': 'Done', '借用登記成功': 'Loan registered', '再登記一筆': 'Register another', '確認': 'OK',
       '請至少選擇一項借用品。': 'Please select at least one item.', '請至少選擇一項預約借用品。': 'Please select at least one item.',
       '請選擇歸還方式。': 'Please choose a return method.', '請選擇歸還日期。': 'Please choose a return date.', '請選擇歸還時間。': 'Please choose a return time.',
       '請在第 2 步選擇今天的課程，或改選「非課程使用」。': 'Choose today\'s class in step 2, or switch to "Not for class".',

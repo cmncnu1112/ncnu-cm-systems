@@ -236,6 +236,8 @@
     .cds-input[readonly]{cursor:pointer;}
     .cds-input.is-invalid{outline:2px solid #da1e28;outline-offset:-2px;}
     .cds-field .cds-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#161616;pointer-events:none;width:16px;height:16px;}
+    /* V2.5.9b：欄位上方有標籤時，top:50% 會以「標籤＋輸入框」整體置中而偏上；改為對齊輸入框本身（高 44px、圖示 16px，下緣留 14px 即垂直置中） */
+    .cds-field .cds-input + .cds-icon{top:auto;bottom:14px;transform:none;}
     /* V2.5.8e：iPhone 點選字級小於 16px 的輸入框會自動放大畫面，cds-input 統一 16px 避免放大 */
     .cds-helper{font-size:12px;color:#6f6f6f;margin-top:6px;min-height:16px;}
     .cds-helper.is-error{color:#da1e28;}

@@ -307,6 +307,39 @@ html:not(#cds) body .active .detail-badge{background:var(--cds-error);color:#fff
 html:not(#cds) body .detail-title{font-weight:600}
 /* ===================== Carbon 主題層結束 ===================== */
 
+
+/* =====================================================================
+   V2026-11-18：右側「鑰匙／設備借用登記」抽屜（觸控看板用）
+   ‧ 預設收起，只露出右側邊緣的直式按鈕；點按鈕滑出，固定在畫面右側
+   ‧ 抽屜內用 iframe 載入同網站的 ../keys/（教室鑰匙與設備借用前台）
+   ‧ 第一次打開才載入，平常不佔看板資源
+   ‧ 收起、登記完成按「確認」、或 3 分鐘沒人操作 → 收起並重新載入表單，
+     公用觸控電腦不會留下上一位學生的資料
+   ‧ 要移除：刪掉這段 CSS、body 最後的 #keysDrawer 區塊與「鑰匙借用抽屜」script 即可
+   ===================================================================== */
+:root{--kd-width:min(560px,40vw);}
+.kd-panel{position:fixed;top:0;right:0;bottom:0;width:var(--kd-width);z-index:1100;background:#f4f4f4;
+  display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.2,0,.38,.9);
+  border-left:1px solid #c6c6c6;visibility:hidden}
+.kd-panel.open{transform:none;visibility:visible}
+.kd-head{flex:0 0 56px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 0 20px;background:#1e3a8a;color:#fff}
+.kd-title{font-size:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kd-close{height:56px;min-width:112px;padding:0 20px;border:0;background:#172b66;color:#fff;font-size:16px;font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;touch-action:manipulation}
+.kd-close:active{background:#0f1f4d}
+.kd-close svg,.kd-tab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.kd-body{flex:1;min-height:0;position:relative}
+.kd-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.kd-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#525252;font-size:16px}
+/* 邊緣直式按鈕：收起時貼在畫面右緣，展開時貼在抽屜左緣 */
+.kd-tab{position:fixed;top:50%;right:0;z-index:1101;transform:translateY(-50%);width:56px;min-height:220px;padding:18px 0;border:0;
+  background:#1e3a8a;color:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;
+  font-size:17px;font-weight:600;letter-spacing:4px;writing-mode:vertical-rl;text-orientation:upright;touch-action:manipulation;
+  transition:right .28s cubic-bezier(.2,0,.38,.9)}
+.kd-tab svg{writing-mode:horizontal-tb}
+.kd-tab:active{background:#172b66}
+.kd-tab.open{right:var(--kd-width);background:#172b66}
+.kd-tab:focus-visible,.kd-close:focus-visible{outline:3px solid #f1c21b;outline-offset:-3px}
 </style>
 
 </head>
@@ -621,6 +654,81 @@ window.addEventListener('load',async()=>{
   await loadToday(true);
   clockTimer=setInterval(updateClock,1000);
   refreshTimer=setInterval(checkVersion,5000);
+});
+</script>
+
+  <!-- 鑰匙／設備借用抽屜（預設收起）。iframe 的 src 在第一次打開時才設定 -->
+  <button class="kd-tab" id="kdTab" type="button" aria-controls="keysDrawer" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+    <span id="kdTabText">借用登記</span>
+  </button>
+  <aside class="kd-panel" id="keysDrawer" aria-label="教室鑰匙與設備借用登記" aria-hidden="true">
+    <div class="kd-head">
+      <div class="kd-title">教室鑰匙與設備借用登記</div>
+      <button class="kd-close" id="kdClose" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>收起</button>
+    </div>
+    <div class="kd-body">
+      <div class="kd-loading" id="kdLoading">正在載入借用登記表…</div>
+      <iframe class="kd-frame" id="kdFrame" title="教室鑰匙與設備借用登記" hidden></iframe>
+    </div>
+  </aside>
+<script>
+/* ===== 鑰匙借用抽屜 =====
+   KD_URL：借用前台（同一個 GitHub Pages 網站的 keys/），kiosk=1 只是標記來源，前台不依賴它
+   KD_IDLE_MS：抽屜打開後多久沒人操作就自動收起並清空表單 */
+const KD_URL='../keys/?kiosk=1';
+const KD_IDLE_MS=180000;
+let kdOpen=false, kdLoaded=false, kdLastAct=0, kdIdleTimer=null;
+const kdPanel=document.getElementById('keysDrawer');
+const kdTab=document.getElementById('kdTab');
+const kdFrame=document.getElementById('kdFrame');
+
+/* 載入（或重新載入）借用表單；重新載入 = 清空上一位使用者填的所有內容 */
+function kdLoadFrame(){
+  kdLoaded=true;
+  kdFrame.hidden=true;
+  document.getElementById('kdLoading').hidden=false;
+  kdFrame.src=KD_URL+'&t='+Date.now();
+}
+kdFrame.addEventListener('load',()=>{
+  if(!kdFrame.src)return;
+  kdFrame.hidden=false;
+  document.getElementById('kdLoading').hidden=true;
+  // 同網域，可以直接監聽表單內的觸控／輸入，用來計算閒置時間
+  try{
+    const doc=kdFrame.contentWindow.document;
+    ['pointerdown','keydown','input','scroll','wheel'].forEach(t=>doc.addEventListener(t,()=>{kdLastAct=Date.now();},{capture:true,passive:true}));
+  }catch(e){}
+});
+
+function kdSetOpen(open){
+  kdOpen=open;
+  kdPanel.classList.toggle('open',open);
+  kdTab.classList.toggle('open',open);
+  kdPanel.setAttribute('aria-hidden',open?'false':'true');
+  kdTab.setAttribute('aria-expanded',open?'true':'false');
+  document.getElementById('kdTabText').textContent=open?'收起':'借用登記';
+  clearInterval(kdIdleTimer);
+  if(open){
+    if(!kdLoaded)kdLoadFrame();
+    kdLastAct=Date.now();
+    // 打開期間暫停看板自動翻頁，避免學生操作時背後一直跳頁
+    touchPauseUntil=Date.now()+KD_IDLE_MS;nextPageAt=touchPauseUntil;
+    kdIdleTimer=setInterval(()=>{
+      if(Date.now()-kdLastAct>=KD_IDLE_MS)kdSetOpen(false);
+      else {touchPauseUntil=Date.now()+TOUCH_PAUSE_MS;nextPageAt=touchPauseUntil;}
+    },5000);
+  }else if(kdLoaded){
+    // 收起後重新載入，下一位打開時是空白表單
+    setTimeout(kdLoadFrame,350);
+  }
+}
+kdTab.addEventListener('click',()=>kdSetOpen(!kdOpen));
+document.getElementById('kdClose').addEventListener('click',()=>kdSetOpen(false));
+// 借用前台按下「確認」後會送 keys-kiosk-done，看板收起抽屜
+window.addEventListener('message',e=>{
+  if(e.origin!==location.origin)return;
+  if(e.data&&e.data.type==='keys-kiosk-done'&&kdOpen)kdSetOpen(false);
 });
 </script>
 </body>

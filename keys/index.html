@@ -49,6 +49,12 @@
     /* V2.5.8e：關閉「點兩下放大」。連續按設備數量的 ＋／－ 時，iPhone 會把兩次點擊當成雙擊而放大畫面；
        manipulation 只取消雙擊縮放，仍保留雙指縮放（方便需要放大字體的人），也讓點擊不再有 300ms 延遲 */
     html, body, * { touch-action: manipulation; }
+    /* V2.5.9：中／EN 切換按鈕 */
+    .lang-toggle{height:40px;padding:0 12px;border-radius:16px;background:#f1f5f9;color:#64748b;font-size:13px;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
+    .lang-toggle:active{transform:scale(.95);}
+    .lang-toggle .lang-on{color:#1e3a8a;}
+    .lang-toggle .lang-off{color:#94a3b8;font-weight:500;}
+    .lang-toggle .lang-sep{margin:0 3px;color:#cbd5e1;font-weight:400;}
     html { -webkit-tap-highlight-color: transparent; }
     body {
       font-family: "Microsoft JhengHei", "微軟正黑體", ui-sans-serif, system-ui,
@@ -273,7 +279,11 @@
           <h1 id="systemName" class="mt-1 text-xl font-black tracking-tight">教室鑰匙與設備借用</h1>
           <p class="text-xs text-slate-400 mt-1">借用品與教室提前登記</p>
         </div>
+        <!-- V2.5.9：中英文切換按鈕（放在重新整理左邊） -->
+        <div class="shrink-0 flex items-center gap-2">
+        <button id="langToggle" data-no-i18n type="button" onclick="toggleLang()" class="lang-toggle" aria-label="Switch to English 切換為英文"><span class="lang-on">中</span><span class="lang-sep">/</span><span class="lang-off">EN</span></button>
         <button onclick="reloadAssets()" class="shrink-0 w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 active:scale-95 transition" aria-label="重新整理"><svg class="licon licon-lg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg></button>
+        </div>
       </div>
 
       <div class="grid grid-cols-4 p-1 rounded-2xl bg-slate-100 mt-4 gap-0.5">
@@ -2957,5 +2967,334 @@
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));}
   function escapeAttr(v){return escapeHtml(v);}
 </script>
+  <!-- =====================================================================
+       V2.5.9：中英文切換（EN／中）
+       ・做法：不改原本的中文程式，切到英文時把畫面上的文字「翻譯顯示」
+         1. EXACT：整段文字完全相同時直接替換
+         2. RULES：含數字、時間等變動內容的句子，用正規表示式套版翻譯
+         3. PHRASES：長句裡的固定片語（由長到短替換），剩下的課名、教室、人名維持原文
+       ・畫面之後重新產生的內容（課程清單、提示、彈窗）由 MutationObserver 自動翻譯
+       ・切回中文時，把記下來的原文還原，已填寫的表單內容不受影響
+       ・語言偏好存在 localStorage（keysLang），下次開啟沿用
+       ・只翻譯文字節點與 placeholder / title / aria-label，不動 input 的值與 option 的 value，
+         所以送到後端的資料仍是中文，不影響任何邏輯
+       ===================================================================== -->
+  <script>
+  (function () {
+    'use strict';
+
+    // ---------- 1. 整段完全相同才替換 ----------
+    const EXACT = {
+      // 頁首與分頁
+      '教室鑰匙與設備借用': 'Classroom Key & Equipment Loans',
+      '借用品與教室提前登記': 'Borrow items or reserve classrooms in advance',
+      '立即借用': 'Borrow now', '提前預約': 'Reserve', '借用紀錄': 'My loans', '預約紀錄': 'My reservations',
+      '重新整理': 'Refresh', '關閉': 'Close', '更新': 'Refresh', '更新庫存': 'Refresh stock', '更新中…': 'Refreshing…',
+      // 借用人資料
+      '借用人資料': 'Borrower', '學號 / 員編': 'Student / Staff ID', '學號 / 員編 *': 'Student / Staff ID *',
+      '姓名': 'Name', '姓名 *': 'Name *', '聯絡電話': 'Phone', '聯絡電話 *': 'Phone *',
+      '系所 / 單位': 'Department / Unit', '系所 / 單位 *': 'Department / Unit *',
+      '查詢': 'Look up', '查詢中': 'Looking up', '查詢中…': 'Looking up…', '查詢失敗': 'Lookup failed',
+      '查詢失敗，仍可手動填寫': 'Lookup failed. You can still fill in the form manually.',
+      '輸入學號 / 員編，自動帶入資料': 'Enter your Student / Staff ID to fill in your details',
+      '輸入學號 / 員編後查詢': 'Enter your Student / Staff ID, then look up',
+      '請輸入學號 / 員編': 'Enter Student / Staff ID',
+      '名冊沒有資料，請直接手動填寫下方欄位': 'Not found in the roster. Please fill in the fields below.',
+      '已帶入名冊資料（正式資料以名冊為準）': 'Filled in from the roster (the roster is the official record)',
+      '此學號／員編目前為黑名單': 'This ID is currently blacklisted',
+      '此學號／員編目前為黑名單，請詢問院辦人員。': 'This ID is currently blacklisted. Please ask the College Office.',
+      '學號 / 員編請只輸入數字。': 'Student / Staff ID must contain digits only.',
+      '聯絡電話請只輸入數字。': 'Phone number must contain digits only.',
+      '黑名單': 'Blacklisted', '提醒': 'Note', '提醒：': 'Note:',
+      // 第 2 步：上課資訊
+      '上課資訊': 'Class information', '上課使用': 'For class', '非課程使用': 'Not for class',
+      '選今天要上的課，系統會依下課時間算出歸還期限': 'Choose today\'s class. The return deadline is based on when the class ends.',
+      '依教室': 'By classroom', '顯示全部': 'Show all', '教室 *': 'Classroom *', '今天的課程 *': 'Today\'s class *',
+      '請選擇教室': 'Select a classroom', '請先選擇教室，或切到「顯示全部」': 'Select a classroom first, or switch to "Show all"',
+      '載入課程中…': 'Loading classes…', '課程篩選方式': 'Class filter', '課堂篩選方式': 'Class filter',
+      '借教室開會、活動，或找不到你的課（例如補課、臨時換教室）時選這個，並在第 4 步自行選擇歸還的日期與時間。':
+        'Choose this for meetings or events, or if you can\'t find your class (e.g. a make-up class or a room change). You will pick the return date and time in step 4.',
+      '今天已經沒有還沒下課的課程。': 'There are no more classes today.',
+      '目前讀不到課程資料': 'Class data is unavailable right now',
+      '目前讀不到課程資料。': 'Class data is unavailable right now.',
+      '目前讀不到課程資料，請稍後再試。': 'Class data is unavailable right now. Please try again later.',
+      '取消這堂課': 'Remove this class',
+      '要借好幾間教室？可以點選多堂課。找不到你的課？切到「顯示全部」找找看；可能是補課或換教室，請改選「非課程使用」。':
+        'Need several classrooms? Tap more than one class. Can\'t find your class? Try "Show all". If it\'s a make-up class or a room change, choose "Not for class".',
+      '要預約好幾間教室？可以點選多堂課，送出後每堂課各成立一筆預約。找不到你的課堂？切到「顯示全部」找找看；仍找不到請洽院辦確認是否已登錄排課系統。':
+        'Need several classrooms? Tap more than one class; each class becomes its own reservation. Can\'t find your class? Try "Show all", or ask the College Office whether it is in the scheduling system.',
+      // 第 3 步：借用品
+      '選擇實際拿取的物品': 'Choose the items you are taking',
+      '請登記「實際拿取」的物品與數量。數量型設備會依目前可用庫存限制借用數量。':
+        'Register the items and quantities you actually take. Quantity items are limited by the stock currently available.',
+      '鑰匙、遙控器可單借；數量型設備直接選數量': 'Keys and remotes can be borrowed separately; for other equipment just choose a quantity',
+      '鑰匙、遙控器可單獨預約；數量型設備直接選數量': 'Keys and remotes can be reserved separately; for other equipment just choose a quantity',
+      '教室借用品': 'Classroom items', '設備 / 庫存': 'Equipment / Stock', '器材即時庫存': 'Live equipment stock', '器材預約庫存': 'Equipment stock for reservations',
+      '搜尋教室，例如 R205': 'Search classroom, e.g. R205', '搜尋設備': 'Search equipment',
+      '載入教室中…': 'Loading classrooms…', '載入設備中…': 'Loading equipment…', '讀取庫存中…': 'Loading stock…',
+      '鑰匙': 'Key', '遙控器': 'Remote', '冷氣遙控器': 'A/C remote', '無鑰匙': 'No key', '無遙控器': 'No remote',
+      '鑰匙不外借': 'Key not for loan', '空調不外借': 'A/C not for loan', '中控': 'Central A/C', '無空調': 'No A/C', '遙控器在內': 'Remote stays in room',
+      '可借用': 'Available', '可預約': 'Available', '借出中': 'On loan', '借用中': 'On loan', '時段已預約': 'Already reserved',
+      '現在可借': 'Available now', '目前無庫存': 'Out of stock', '目前無法借出': 'Not available', '庫存不足': 'Not enough stock', '庫存較少': 'Low stock',
+      '全部': 'All', '請選擇': 'Select',
+      '課後15分鐘內': 'Within 15 min after class', '課後30分鐘內': 'Within 30 min after class', '本日下午5點前': 'By 5 PM today', '未分類': 'Other', '增加': 'Increase', '減少': 'Decrease', '數量': 'Quantity',
+      '尚未選擇借用品': 'No items selected yet', '尚未選擇預約借用品': 'No items selected yet', '尚未選擇時段': 'No time slot selected',
+      '目前已選': 'Selected', '借用品': 'Items', '件': 'pcs', '支': 'pcs',
+      '上課使用：系統已依你選的課程帶入鑰匙與冷氣遙控器，不需要的可以點一下取消。':
+        'For class: the key and A/C remote for your class are already selected. Tap to remove any you don\'t need.',
+      '請先在第 2 步選擇課程': 'Choose your class in step 2 first',
+      '請先在第 2 步選擇課堂': 'Choose your class in step 2 first',
+      // 第 4 步：歸還
+      '借還時間與歸還方式': 'Return time and method', '預計歸還': 'Expected return',
+      '上課使用：下課後 30 分鐘內歸還': 'For class: return within 30 minutes after class ends',
+      '選好課程後，這裡會顯示歸還期限': 'The return deadline will appear here after you choose a class',
+      '選好課堂後，這裡會顯示歸還時間': 'The return time will appear here after you choose a class',
+      '非課程使用：自行選擇歸還的日期與時間': 'Not for class: choose the return date and time yourself',
+      '歸還日期 *': 'Return date *', '歸還時間 *': 'Return time *', '歸還方式 *': 'Return method *', '選擇歸還日期': 'Choose return date',
+      '24 小時制，例如 17:30。也可以直接輸入。': '24-hour format, e.g. 17:30. You can also type it in.',
+      '下課時間超過下午 5 點（院辦已下班）時，請把借用品投入歸還箱，謝謝。':
+        'If your class ends after 5 PM (the College Office is closed), please put the items in the drop box. Thank you.',
+      '歸還時間不可早於現在。': 'The return time cannot be earlier than now.',
+      '時間格式不正確，請輸入 00:00～23:59。': 'Invalid time. Please enter 00:00–23:59.',
+      '歸還箱': 'Drop box', '櫃檯歸還': 'Return at the counter', '（投入歸還箱）': '(drop box)',
+      '上個月': 'Previous month', '下個月': 'Next month',
+      '日': 'Sun', '一': 'Mon', '二': 'Tue', '三': 'Wed', '四': 'Thu', '五': 'Fri', '六': 'Sat',
+      '備註': 'Notes', '借用用途': 'Purpose',
+      '例如：活動用途、特殊需求、借用說明…': 'e.g. purpose, special needs, notes…',
+      '例如：活動借用、長期借用…': 'e.g. event, long-term loan…',
+      '例如：110305001': 'e.g. 110305001', '例如：資管系': 'e.g. Dept. of Information Management',
+      // 確認與送出
+      '確認送出': 'Submit', '確認內容': 'Confirm', '最後確認一次再送出': 'Please check once more before submitting',
+      '返回修改': 'Go back', '送出中…': 'Submitting…', '送出失敗': 'Submission failed',
+      '確認借用內容': 'Confirm your loan', '確認提前預約': 'Confirm your reservation', '確認預約': 'Confirm reservation',
+      '登記成功': 'Done', '借用登記成功': 'Loan registered', '再登記一筆': 'Register another',
+      '請至少選擇一項借用品。': 'Please select at least one item.', '請至少選擇一項預約借用品。': 'Please select at least one item.',
+      '請選擇歸還方式。': 'Please choose a return method.', '請選擇歸還日期。': 'Please choose a return date.', '請選擇歸還時間。': 'Please choose a return time.',
+      '請在第 2 步選擇今天的課程，或改選「非課程使用」。': 'Choose today\'s class in step 2, or switch to "Not for class".',
+      '請在第 2 步選擇課堂。': 'Choose a class in step 2.',
+      '請完成：': 'Please complete:', '暫時無法借用或預約，請詢問管理學院院辦人員。': 'Borrowing and reservations are temporarily unavailable. Please ask the College of Management Office.',
+      // 提前預約
+      '選擇預約的課堂': 'Choose the class to reserve for', '只能預約排課系統中已登錄的課程、會議或活動': 'Only classes, meetings and events in the scheduling system can be reserved',
+      '使用日期 *': 'Date *', '請先選日期': 'Choose a date first', '課堂 *': 'Class *', '開始時間 *': 'Start time *', '結束時間 *': 'End time *', '先選開始時間': 'Choose the start time first',
+      '時段與歸還時間依課堂自動帶入，不能修改': 'The time slot and return time follow the class and cannot be changed',
+      '選擇預約借用品': 'Choose items to reserve', '選擇第 3 項時段後會自動確認可預約數量': 'Available quantities are checked after you choose a time slot',
+      '選時段後確認': 'Checked after choosing a time',
+      '這一天排課系統沒有還沒結束的課程、會議或活動。': 'There are no upcoming classes, meetings or events on this day in the scheduling system.',
+      '本表單登記預約後，時間到會自動轉成借用單，不需再多填一次，謝謝各位配合。':
+        'Once reserved, it becomes a loan automatically at the reserved time. No need to fill in the form again. Thank you.',
+      '課程在下午 5 點後結束時，系統會自動設為「歸還箱」，結束後請把借用品投入歸還箱，謝謝。':
+        'If the class ends after 5 PM, the return method is set to "Drop box". Please put the items in the drop box afterwards. Thank you.',
+      '請先完整選擇使用日期與開始、結束時間。': 'Please choose the date, start time and end time.',
+      '請完整選擇使用日期與時間。': 'Please choose the date and time.',
+      '結束時間必須晚於開始時間。': 'The end time must be later than the start time.',
+      '查詢該時段可預約狀態…': 'Checking availability for this time slot…', '已更新此時段可預約狀態': 'Availability updated for this time slot',
+      '該時段可預約': 'Available for this time slot', '該時段已滿': 'Fully booked for this time slot',
+      '無法取得時段庫存，請稍後再試': 'Could not check availability. Please try again later.',
+      '預約時段狀態已更新。': 'Availability updated.', '部分設備數量已依該時段可預約庫存自動調整。': 'Some quantities were adjusted to the stock available for this time slot.',
+      '預約已建立': 'Reservation created', '依預約時段計算': 'Based on the reserved time slot', '此課堂': 'This class',
+      '以下教室在所選時段已有預約：': 'These classrooms are already reserved for this time slot: ',
+      // 紀錄
+      '輸入學號 / 員編即可查詢自己的借用資料。': 'Enter your Student / Staff ID to see your loans.',
+      '輸入學號 / 員編即可查詢自己的預約資料。': 'Enter your Student / Staff ID to see your reservations.',
+      '只能查看當月借用紀錄，資料庫一個月定期格式化一次。': 'Only this month\'s loans are shown. Records are cleared monthly.',
+      '可查看當月歷史、未來預約紀錄，資料庫一個月定期格式化一次。': 'Shows this month\'s and upcoming reservations. Records are cleared monthly.',
+      '本月歷史': 'This month', '未來預約': 'Upcoming', '已結案': 'Returned', '已完成': 'Completed', '已取消': 'Cancelled', '已預約': 'Reserved',
+      '待歸還': 'Awaiting return', '部分歸還': 'Partly returned', '轉借異常': 'Conversion issue', '使用中': 'In use',
+      // 庫存提示
+      '庫存已更新': 'Stock updated', '庫存更新：剛剛': 'Stock updated: just now', '剛剛': 'just now',
+      '正在更新最新庫存與借用狀態…': 'Updating stock and loan status…',
+      '目前借出中，請洽院辦。': 'is currently on loan. Please ask the College Office.'
+    };
+
+    // ---------- 1b. 設備分類與設備名稱（來自「設備清單」工作表的資料）----------
+    // 以「英文 (中文)」雙語顯示，方便外籍學生與工讀生對照；之後新增的設備若沒加進來，會維持中文
+    const EQUIP = {
+      '套裝設備': 'Equipment sets', '線材／轉接': 'Cables & adapters', '活動／場佈': 'Event & setup', '影音／簡報': 'AV & presentation',
+      '搬運設備': 'Moving equipment', '其他備品': 'Other supplies', 'B15箱用設備': 'B15 equipment box',
+      'HDMI線': 'HDMI cable', 'VGA線': 'VGA cable', '轉接頭': 'Adapter', 'Type-C轉接頭': 'Type-C adapter', '延長線': 'Extension cord',
+      '折疊椅': 'Folding chair', '桌巾': 'Tablecloth', '叫人鈴': 'Call bell', '簡報筆': 'Presentation clicker', '錄音筆': 'Voice recorder',
+      '長桌': 'Long table', '推車': 'Cart', '充電電池': 'Rechargeable batteries', '麥克風': 'Microphone'
+    };
+    Object.keys(EQUIP).forEach(k => { if (!EXACT[k]) EXACT[k] = `${EQUIP[k]} (${k})`; });
+    Object.assign(EXACT, { '讀取課堂中…': 'Loading classes…', '讀取中…': 'Loading…' });
+
+    // ---------- 2. 含變動內容的句子：正規表示式套版 ----------
+    const RULES = [
+      [/^可借 (\d+) 種 \/ 共 (\d+) 種$/, 'Available $1 / $2 types'],
+      [/^(\d+) 種 \/ (\d+) 件$/, '$1 types / $2 pcs'],
+      [/^(\d+) 種$/, '$1 types'],
+      [/^(\d+) 種庫存較少$/, '$1 low on stock'],
+      [/^(\d+) 種目前借完$/, '$1 out of stock'],
+      [/^可借 (\d+) \/ (\d+) ?(\S*)$/, 'Available $1 / $2'],
+      [/^可預約 (\d+) \/ (\d+) ?(\S*)$/, 'Available $1 / $2'],
+      [/^總庫存 (\d+) ?(\S*)$/, 'Total stock $1'],
+      [/^已選 (\d+) 堂：$/, '$1 selected: '],
+      [/^共 (\d+) 堂，每堂各自歸還$/, '$1 classes; return each separately'],
+      [/^提前預約成功（共 (\d+) 筆）$/, 'Reserved ($1 bookings)'],
+      [/^提前預約成功$/, 'Reserved'],
+      [/^今天 (\d{1,2}:\d{2}) 前歸還（投入歸還箱）$/, 'Return by $1 today (drop box)'],
+      [/^今天 (\d{1,2}:\d{2}) 前歸還$/, 'Return by $1 today'],
+      [/^(\d{4}\/\d{2}\/\d{2}) (\d{1,2}:\d{2}) 前（非課程使用）$/, 'By $1 $2 (not for class)'],
+      [/^(\d{4}\/\d{2}\/\d{2}) (\d{1,2}:\d{2}) 前$/, 'By $1 $2'],
+      [/^今天 (\d{1,2}:\d{2}) 前（(.+)，(?:最後一堂 )?(\d{1,2}:\d{2}) 下課(，投入歸還箱)?）$/,
+        (m, t, c, e, d) => `By ${t} today (${c}, ends ${e}${d ? ', drop box' : ''})`],
+      [/^(\d{4}-\d{2}-\d{2}) (\d{1,2}:\d{2}) 前｜(.*)$/, 'By $1 $2 | $3'],
+      [/^庫存更新：(.+)$/, 'Stock updated: $1'],
+      [/^庫存更新失敗：(.+)$/, 'Stock update failed: $1'],
+      [/^載入失敗：(.+)$/, 'Failed to load: $1'],
+      [/^送出失敗：(.+)$/, 'Submission failed: $1'],
+      [/^時段衝突，已取消選取：(.+)$/, 'Time conflict, removed: $1'],
+      [/^課堂 (\d{1,2}:\d{2}) 結束，(\d{1,2}:\d{2}) 後院辦已下班，一律投入歸還箱。$/, 'The class ends at $1. The office closes at $2, so please use the drop box.'],
+      // 選課後的提示：「已幫你選取 B11 的鑰匙與冷氣遙控器，…」
+      [/^已幫你選取 (\S+) 的(.+?)，不需要的可在第 3 步取消。(.*)$/, (m, room, items, rest) => `Selected for you: ${room} ${itemsEn(items)}. You can remove any you don't need in step 3.${rest ? ' ' + tr(rest.trim()) : ''}`],
+      [/^(\S+) 的(.+?)目前借出中，請洽院辦。$/, (m, room, items) => `${room} ${itemsEn(items)} is currently on loan. Please ask the College Office.`],
+      [/^已取消 (\S*) 的鑰匙與遙控器。$/, 'Removed the key and remote for $1.'],
+      // 歸還說明：「個經（B11）18:00 下課，下課後 30 分鐘內；17:00 後院辦已下班，…」
+      [/^(.+?)（(.+?)）(最後一堂 )?(\d{1,2}:\d{2}) 下課，下課後 (\d+) 分鐘內(一起歸還)?(；(\d{1,2}:\d{2}) 後院辦已下班，請把借用品投入歸還箱)?$/,
+        (m, title, room, last, end, buf, together, late) => `${title} (${room}) ${last ? 'last class ' : ''}ends at ${end}; return within ${buf} min${together ? ' (all together)' : ''}${late ? '. The office is closed after 17:00, so please use the drop box.' : ''}`],
+      // 預約多堂：「B11 個經：09:00～12:00，2026/11/20 12:30 前歸還」
+      [/^(.+?)：(\d{1,2}:\d{2})～(\d{1,2}:\d{2})，(.+?)歸還$/, (m, c, a, b2, due) => `${c}: ${a}–${b2}, return ${tr(due.trim())}`],
+      [/^(.+?)（(.+?)）(\d{1,2}:\d{2}) 結束，結束後 (\d+) 分鐘內歸還$/, '$1 ($2) ends at $3; return within $4 min'],
+      [/^已借出 (\d+) ?(\S*)$/, 'On loan: $1'],
+      [/^年$/, ''], [/^(\d{4}) 年 (\d{1,2}) 月$/, '$1 / $2'], [/^(\d{4})年(\d{1,2})月$/, '$1 / $2']
+    ];
+
+    // ---------- 3. 長句中的固定片語（由長到短替換，人名、課名、教室不會被動到） ----------
+    const PHRASES = [
+      ['不需要的可在第 3 步取消。', 'You can remove any you don\'t need in step 3.'],
+      ['，不需要的可在第 3 步取消。', '. You can remove any you don\'t need in step 3.'],
+      ['已幫你選取 ', 'Selected for you: '],
+      ['後院辦已下班，請把借用品投入歸還箱', ' — the office is closed, so please use the drop box'],
+      ['這幾堂會自動設為「歸還箱」；上方選的方式只套用其他課堂。', 'these will use the drop box; the method above applies to the others.'],
+      ['已取消 ', 'Removed '], ['的鑰匙與遙控器。', ' key and remote.'],
+      ['目前借出中，請洽院辦。', 'is currently on loan. Please ask the College Office.'],
+      ['下課後 ', 'within '], [' 分鐘內歸還', ' min after class'], [' 分鐘內一起歸還', ' min after the last class'], [' 分鐘內', ' min after class'],
+      ['最後一堂 ', 'last class '], [' 下課', ' ends'], [' 結束，結束後 ', ' ends; return within '],
+      ['預約的教室必須是所選課堂的教室', 'The classroom must be the one where your class takes place'],
+      ['預約的教室必須是課堂所在的教室', 'The classroom must be the one where your class takes place'],
+      ['上課使用只能借所選課程教室的鑰匙與遙控器；要借其他教室請改選「非課程使用」。',
+        'For class use you can only borrow the key and remote for your class\'s classroom. To borrow another room, choose "Not for class".'],
+      ['同一間教室且時段重疊，請只選一堂。', 'are in the same classroom at overlapping times. Please choose only one.'],
+      ['已經下課，無法預約。', 'has already ended and cannot be reserved.'],
+      ['找不到你選的課程，課程可能剛異動。請重新整理頁面，或改選「非課程使用」。', 'Your class could not be found; it may have just changed. Refresh the page or choose "Not for class".'],
+      ['找不到你選的課堂，課程可能剛異動。請重新整理頁面後再選。', 'Your class could not be found; it may have just changed. Please refresh and choose again.'],
+      ['以下教室在課堂時段已有預約：', 'These classrooms are already reserved at that time: '],
+      ['預計歸還時間最多只能選 180 天內。', 'The return date must be within 180 days.'],
+      ['此學號未登錄於名冊', 'This ID is not in the roster'],
+      ['部分項目的可借數量不足', 'Not enough stock for some items'],
+      ['請至少選擇一項預約借用品。', 'Please select at least one item.'],
+      ['冷氣遙控器', 'A/C remote'], ['遙控器', 'remote'], ['鑰匙', 'key'], ['會議室', ' Meeting Room']
+      // 注意：不放「與」「、」這類通用字，否則會把課程名稱（例如「中文思辯與表達」）也改掉
+    ].sort((a, b) => b[0].length - a[0].length);
+
+    // 「鑰匙與冷氣遙控器」這類借用品清單
+    function itemsEn(t) { return t.split('與').map(x => ({ '鑰匙': 'key', '冷氣遙控器': 'A/C remote', '遙控器': 'remote' }[x.trim()] || x.trim())).join(' and '); }
+
+    const CJK = /[㐀-鿿（-？、-】]/;
+    const ATTRS = ['placeholder', 'title', 'aria-label'];
+    // 記錄「原文」與「我們寫上去的譯文」：目前內容等於譯文時代表是自己改的，不再重翻，也不會把譯文誤當原文
+    const original = new WeakMap();        // 文字節點 → { zh: 原文, en: 譯文 }
+    const originalAttr = new WeakMap();    // 元素 → { 屬性名: { zh, en } }
+    let lang = 'zh';
+    try { lang = localStorage.getItem('keysLang') === 'en' ? 'en' : 'zh'; } catch (e) {}
+    let busy = false;                      // 自己改文字時暫停 observer，避免無限迴圈
+
+    // 翻譯一段文字：先整段，再套版，最後替換片語
+    function tr(raw) {
+      if (!raw || !CJK.test(raw)) return raw;
+      const lead = raw.match(/^\s*/)[0], tail = raw.match(/\s*$/)[0];
+      const s = raw.trim();
+      if (Object.prototype.hasOwnProperty.call(EXACT, s)) return lead + EXACT[s] + tail;
+      if (s.indexOf(' · ') > 0) return lead + s.split(' · ').map(x => tr(x)).join(' · ') + tail;   // 例如「可借 13 種 / 共 14 種 · 1 種目前借完」
+      for (const [re, to] of RULES) if (re.test(s)) return lead + s.replace(re, to) + tail;
+      let out = s;
+      for (const [zh, en] of PHRASES) if (out.indexOf(zh) >= 0) out = out.split(zh).join(en);
+      return lead + out + tail;
+    }
+
+    const SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, INPUT: 1, NOSCRIPT: 1 };
+    // 課程卡片與已選課程標籤是排課系統的資料（課名、系所、教師），維持原文不翻
+    const DATA_SELECTOR = '[data-no-i18n], .course-tile, .course-chips button';
+    function translateNode(node) {
+      if (node.nodeType === 3) {
+        const p = node.parentNode;
+        if (!p || SKIP[p.nodeName] || (p.closest && p.closest(DATA_SELECTOR))) return;   // 切換按鈕、課程資料不翻
+        const cur = node.nodeValue;
+        const rec = original.get(node);
+        if (rec && rec.en === cur) return;              // 已是我們翻好的內容
+        if (!CJK.test(cur)) return;
+        const t = tr(cur);
+        original.set(node, { zh: cur, en: t });
+        if (t !== cur) node.nodeValue = t;              // 只有真的不同才寫入，避免觸發多餘的變動事件
+        return;
+      }
+      if (node.nodeType !== 1 || (SKIP[node.nodeName] && node.nodeName !== 'INPUT' && node.nodeName !== 'TEXTAREA')) return;
+      if (node.matches && node.matches(DATA_SELECTOR)) return;
+      ATTRS.forEach(a => {
+        const v = node.getAttribute && node.getAttribute(a);
+        if (!v) return;
+        const store = originalAttr.get(node) || {};
+        if (store[a] && store[a].en === v) return;      // 已是我們翻好的內容
+        if (!CJK.test(v)) return;
+        const t = tr(v);
+        store[a] = { zh: v, en: t }; originalAttr.set(node, store);
+        if (t !== v) node.setAttribute(a, t);
+      });
+      if (SKIP[node.nodeName]) return;
+      node.childNodes.forEach(translateNode);
+    }
+
+    // 切回中文：把記下來的原文還原
+    function restoreNode(node) {
+      if (node.nodeType === 3) {
+        const rec = original.get(node);
+        if (rec && node.nodeValue === rec.en) node.nodeValue = rec.zh;   // 只還原我們改過、之後沒被程式改掉的文字
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const store = originalAttr.get(node);
+      if (store) Object.keys(store).forEach(a => { if (node.getAttribute(a) === store[a].en) node.setAttribute(a, store[a].zh); });
+      node.childNodes.forEach(restoreNode);
+    }
+
+    function apply() {
+      busy = true;
+      document.documentElement.lang = lang === 'en' ? 'en' : 'zh-Hant';
+      if (lang === 'en') translateNode(document.body); else restoreNode(document.body);
+      const btn = document.getElementById('langToggle');
+      if (btn) btn.innerHTML = lang === 'en' ? '<span class="lang-off">中</span><span class="lang-sep">/</span><span class="lang-on">EN</span>'
+                                              : '<span class="lang-on">中</span><span class="lang-sep">/</span><span class="lang-off">EN</span>';
+      if (btn) btn.setAttribute('aria-label', lang === 'en' ? '切換為中文 Switch to Chinese' : 'Switch to English 切換為英文');
+      busy = false;
+    }
+
+    // 畫面重新產生的內容：英文模式下即時翻譯
+    const observer = new MutationObserver(list => {
+      if (busy || lang !== 'en') return;
+      busy = true;
+      list.forEach(m => {
+        if (m.type === 'characterData') translateNode(m.target);
+        else if (m.type === 'attributes') translateNode(m.target);
+        else m.addedNodes.forEach(translateNode);
+      });
+      busy = false;
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+
+    // 頁首按鈕：中 ⇄ EN
+    window.toggleLang = function () {
+      lang = lang === 'en' ? 'zh' : 'en';
+      try { localStorage.setItem('keysLang', lang); } catch (e) {}
+      apply();
+    };
+
+    // 後端錯誤訊息等以 alert 顯示的文字也一併翻譯
+    const nativeAlert = window.alert;
+    window.alert = function (msg) { return nativeAlert.call(window, lang === 'en' ? tr(String(msg)) : msg); };
+
+    apply();
+  })();
+  </script>
+
 </body>
 </html>

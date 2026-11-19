@@ -357,8 +357,8 @@
             </div>
           </div>
           <div class="cds-switcher mb-4" role="tablist" aria-label="借用用途">
-            <button type="button" id="useModeCourse" class="is-active" onclick="setReturnMode('COURSE')">上課使用</button>
-            <button type="button" id="useModeOther" onclick="setReturnMode('OTHER')">非課程使用</button>
+            <button type="button" id="useModeCourse" class="is-active" onclick="setReturnMode('COURSE')">學校系統已預約</button>
+            <button type="button" id="useModeOther" onclick="setReturnMode('OTHER')">臨時使用</button>
           </div>
           <div id="coursePanel">
             <!-- V2.5.8c：學生不一定知道開課系所，可改用教室篩選或顯示全部 -->
@@ -436,12 +436,12 @@
             <span class="w-8 h-8 rounded-circle bg-teal-600 text-white flex items-center justify-center font-black text-sm">4</span>
             <div>
               <h2 class="font-black text-sm">預計歸還</h2>
-              <p id="returnStepHint" class="text-[11px] text-slate-400">上課使用：下課後 30 分鐘內歸還</p>
+              <p id="returnStepHint" class="text-[11px] text-slate-400">學校系統已預約：下課後 30 分鐘內歸還</p>
             </div>
           </div>
-          <!-- 上課使用：顯示系統算出的歸還期限 -->
+          <!-- 學校系統已預約：顯示系統算出的歸還期限 -->
           <div id="dueCourseBox" class="due-summary"><b>請先在第 2 步選擇課程</b><p>選好課程後，這裡會顯示歸還期限</p></div>
-          <!-- 非課程使用：Carbon 日期盤＋時間盤 -->
+          <!-- 臨時使用：Carbon 日期盤＋時間盤 -->
           <div id="dueOtherBox" class="hidden grid grid-cols-2 gap-3">
             <div class="cds-field" id="dueDateField">
               <label class="cds-label" for="dueDateInput">歸還日期 *</label>
@@ -768,15 +768,15 @@
     equipmentQty: new Map(),
     returnTime: '',
     // V2.5.8：上課資訊與預計歸還
-    returnMode: 'COURSE',      // COURSE＝上課使用；OTHER＝非課程使用
+    returnMode: 'COURSE',      // COURSE＝學校系統已預約；OTHER＝臨時使用
     courses: null,             // getTodayCoursesV2 的結果
     courseDept: '',
     courseFilter: 'ROOM',      // V2.5.8d：ROOM 依教室（預設）｜ALL 顯示全部
     courseRoom: '',            // 依教室篩選時選的教室
     courseId: '',              // 相容舊程式：等於 courseIds[0]
     courseIds: [],             // V2.5.8c：可複選多堂課（借多間教室）
-    dueDate: '',               // 非課程使用：yyyy-MM-dd
-    dueTime: '',               // 非課程使用：HH:mm
+    dueDate: '',               // 臨時使用：yyyy-MM-dd
+    dueTime: '',               // 臨時使用：HH:mm
     calMonth: null,            // 日期盤目前顯示的月份（Date，當月 1 日）
     resvCourses: null,         // 預約：所選日期的課堂（getCoursesByDateV2）
     resvDept: '',
@@ -1353,11 +1353,11 @@
     const box = document.getElementById('roomList');
     if (!box) return;
 
-    // V2.5.8e：上課使用時，只列出所選課程的教室；鑰匙／遙控器由系統預先勾選，學生仍可自行取消
+    // V2.5.8e：學校系統已預約時，只列出所選課程的教室；鑰匙／遙控器由系統預先勾選，學生仍可自行取消
     if (state.returnMode === 'COURSE') {
       const ids = selectedCoursesFrom(state.courses, state.courseIds).map(c => c.roomId).filter(Boolean);
       const lockedRooms = allRooms.filter(r => ids.includes(r.id));
-      box.innerHTML = '<p class="cds-helper mb-2">上課使用：系統已依你選的課程帶入鑰匙與冷氣遙控器，不需要的可以點一下取消。</p>' +
+      box.innerHTML = '<p class="cds-helper mb-2">學校系統已預約：系統已依你選的課程帶入鑰匙與冷氣遙控器，不需要的可以點一下取消。</p>' +
         (lockedRooms.length ? lockedRooms.map(roomAssetRowHtml).join('')
           : '<div class="text-center py-8 text-xs text-slate-400">請先在第 2 步選擇課程</div>');
       return;
@@ -2187,9 +2187,9 @@
      ============================================================ */
   const pad2 = n => String(n).padStart(2, '0');
   const ymd = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-  const MAX_DUE_DAYS = 180;   // 非課程使用最多可選 180 天內（與後端一致）
+  const MAX_DUE_DAYS = 180;   // 臨時使用最多可選 180 天內（與後端一致）
 
-  // 讀今天還沒下課的課程；讀不到就自動改成「非課程使用」
+  // 讀今天還沒下課的課程；讀不到就自動改成「臨時使用」
   function loadTodayCourses() {
     google.script.run
       .withSuccessHandler(res => {
@@ -2203,8 +2203,8 @@
       .getTodayCoursesV2();
   }
 
-  // 切換「上課使用／非課程使用」
-  // V2.5.8d：依已選課程重新帶入鑰匙／遙控器（上課使用時第 3 步的教室項目完全由課程決定）
+  // 切換「學校系統已預約／臨時使用」
+  // V2.5.8d：依已選課程重新帶入鑰匙／遙控器（學校系統已預約時第 3 步的教室項目完全由課程決定）
   function rebuildCourseRoomAssets() {
     state.roomKeyIds.clear();
     state.remoteIds.clear();
@@ -2216,7 +2216,7 @@
   function setReturnMode(mode) {
     const prev = state.returnMode;
     state.returnMode = mode === 'OTHER' ? 'OTHER' : 'COURSE';
-    // 切換用途：上課使用→依課程重新帶入；非課程使用→清空，讓學生自己選教室
+    // 切換用途：學校系統已預約→依課程重新帶入；臨時使用→清空，讓學生自己選教室
     if (prev !== state.returnMode && state.data) {
       if (state.returnMode === 'COURSE') rebuildCourseRoomAssets();
       else { state.roomKeyIds.clear(); state.remoteIds.clear(); if (state.assetTab === 'ROOM') renderRooms(); updateSelectedUI(); }
@@ -2418,11 +2418,11 @@
     const data = state.courses;
     if (!data) return;
 
-    // 讀不到或今天已經沒有課：提示並切到「非課程使用」
+    // 讀不到或今天已經沒有課：提示並切到「臨時使用」
     if (!data.success || !(data.courses || []).length) {
       sel.innerHTML = '<option value="">今天沒有可選的課程</option>';
       sel.disabled = true;
-      listBox.innerHTML = `<p class="cds-helper">${escapeHtml(data.success ? '今天已經沒有還沒下課的課程。' : (data.message || '目前讀不到課程資料。'))}請改選「非課程使用」。</p>`;
+      listBox.innerHTML = `<p class="cds-helper">${escapeHtml(data.success ? '今天已經沒有還沒下課的課程。' : (data.message || '目前讀不到課程資料。'))}請改選「臨時使用」。</p>`;
       if (state.returnMode === 'COURSE') setReturnMode('OTHER');
       return;
     }
@@ -2435,10 +2435,10 @@
     if (mode !== 'ALL' && !value) { listBox.innerHTML = chips + '<p class="cds-helper">請先選擇教室，或切到「顯示全部」</p>'; return; }
     const courses = filterCoursesBy(data, mode, value);
     listBox.innerHTML = chips + courses.map(c => courseTileHtml(c, state.courseIds, mode, 'selectCourse')).join('') +
-      '<p class="cds-helper">要借好幾間教室？可以點選多堂課。找不到你的課？切到「顯示全部」找找看；可能是補課或換教室，請改選「非課程使用」。</p>';
+      '<p class="cds-helper">要借好幾間教室？可以點選多堂課。找不到你的課？切到「顯示全部」找找看；可能是補課或換教室，請改選「臨時使用」。</p>';
   }
 
-  // 上課使用：下課時間＋緩衝分鐘（只用來顯示，正式到期時間由後端計算）
+  // 學校系統已預約：下課時間＋緩衝分鐘（只用來顯示，正式到期時間由後端計算）
   function courseDueText(c) {
     const buf = Number(state.courses && state.courses.bufferMin) || 30;
     const [h, m] = c.endTime.split(':').map(Number);
@@ -2455,7 +2455,7 @@
     courseBox.classList.toggle('hidden', !isCourse);
     otherBox.classList.toggle('hidden', isCourse);
     const buf = Number(state.courses && state.courses.bufferMin) || 30;
-    hint.textContent = isCourse ? `上課使用：下課後 ${buf} 分鐘內歸還` : '非課程使用：自行選擇歸還的日期與時間';
+    hint.textContent = isCourse ? `學校系統已預約：下課後 ${buf} 分鐘內歸還` : '臨時使用：自行選擇歸還的日期與時間';
     if (isCourse) {
       const c = currentCourse();
       const after = (state.courses && state.courses.dropboxAfter) || '17:00';
@@ -2588,7 +2588,7 @@
   // 送出前檢查預計歸還；回傳錯誤訊息，空字串表示通過
   function validateReturnPlan() {
     if (state.returnMode === 'COURSE') {
-      if (!state.courseIds.length) return '請在第 2 步選擇今天的課程，或改選「非課程使用」。';
+      if (!state.courseIds.length) return '請在第 2 步選擇今天的課程，或改選「臨時使用」。';
       return '';
     }
     if (!state.dueDate) { document.getElementById('dueDateInput').classList.add('is-invalid'); return '請選擇歸還日期。'; }
@@ -2610,7 +2610,7 @@
       const after = (state.courses && state.courses.dropboxAfter) || '17:00';
       return c ? `今天 ${courseDueText(c)} 前（${c.title}，${c.ids.length > 1 ? '最後一堂 ' : ''}${c.endTime} 下課${c.endTime > after ? '，投入歸還箱' : ''}）` : '';
     }
-    return `${state.dueDate.replace(/-/g, '/')} ${state.dueTime} 前（非課程使用）`;
+    return `${state.dueDate.replace(/-/g, '/')} ${state.dueTime} 前（臨時使用）`;
   }
 
   /* ============================================================
@@ -3042,7 +3042,7 @@
       '聯絡電話請只輸入數字。': 'Phone number must contain digits only.',
       '黑名單': 'Blacklisted', '提醒': 'Note', '提醒：': 'Note:',
       // 第 2 步：上課資訊
-      '上課資訊': 'Class information', '上課使用': 'For class', '非課程使用': 'Not for class',
+      '上課資訊': 'Class information', '學校系統已預約': 'Booked in school system', '臨時使用': 'Temporary use',
       '選今天要上的課，系統會依下課時間算出歸還期限': 'Choose today\'s class. The return deadline is based on when the class ends.',
       '依教室': 'By classroom', '顯示全部': 'Show all', '教室 *': 'Classroom *', '今天的課程 *': 'Today\'s class *',
       '請選擇教室': 'Select a classroom', '請先選擇教室，或切到「顯示全部」': 'Select a classroom first, or switch to "Show all"',
@@ -3054,8 +3054,8 @@
       '目前讀不到課程資料。': 'Class data is unavailable right now.',
       '目前讀不到課程資料，請稍後再試。': 'Class data is unavailable right now. Please try again later.',
       '取消這堂課': 'Remove this class',
-      '要借好幾間教室？可以點選多堂課。找不到你的課？切到「顯示全部」找找看；可能是補課或換教室，請改選「非課程使用」。':
-        'Need several classrooms? Tap more than one class. Can\'t find your class? Try "Show all". If it\'s a make-up class or a room change, choose "Not for class".',
+      '要借好幾間教室？可以點選多堂課。找不到你的課？切到「顯示全部」找找看；可能是補課或換教室，請改選「臨時使用」。':
+        'Need several classrooms? Tap more than one class. Can\'t find your class? Try "Show all". If it\'s a make-up class or a room change, choose "Temporary use".',
       '要預約好幾間教室？可以點選多堂課，送出後每堂課各成立一筆預約。找不到你的課堂？切到「顯示全部」找找看；仍找不到請洽院辦確認是否已登錄排課系統。':
         'Need several classrooms? Tap more than one class; each class becomes its own reservation. Can\'t find your class? Try "Show all", or ask the College Office whether it is in the scheduling system.',
       // 第 3 步：借用品
@@ -3075,16 +3075,16 @@
       '課後15分鐘內': 'Within 15 min after class', '課後30分鐘內': 'Within 30 min after class', '本日下午5點前': 'By 5 PM today', '未分類': 'Other', '增加': 'Increase', '減少': 'Decrease', '數量': 'Quantity',
       '尚未選擇借用品': 'No items selected yet', '尚未選擇預約借用品': 'No items selected yet', '尚未選擇時段': 'No time slot selected',
       '目前已選': 'Selected', '借用品': 'Items', '件': 'pcs', '支': 'pcs',
-      '上課使用：系統已依你選的課程帶入鑰匙與冷氣遙控器，不需要的可以點一下取消。':
-        'For class: the key and A/C remote for your class are already selected. Tap to remove any you don\'t need.',
+      '學校系統已預約：系統已依你選的課程帶入鑰匙與冷氣遙控器，不需要的可以點一下取消。':
+        'Booked in school system: the key and A/C remote for your class are already selected. Tap to remove any you don\'t need.',
       '請先在第 2 步選擇課程': 'Choose your class in step 2 first',
       '請先在第 2 步選擇課堂': 'Choose your class in step 2 first',
       // 第 4 步：歸還
       '借還時間與歸還方式': 'Return time and method', '預計歸還': 'Expected return',
-      '上課使用：下課後 30 分鐘內歸還': 'For class: return within 30 minutes after class ends',
+      '學校系統已預約：下課後 30 分鐘內歸還': 'Booked in school system: return within 30 minutes after class ends',
       '選好課程後，這裡會顯示歸還期限': 'The return deadline will appear here after you choose a class',
       '選好課堂後，這裡會顯示歸還時間': 'The return time will appear here after you choose a class',
-      '非課程使用：自行選擇歸還的日期與時間': 'Not for class: choose the return date and time yourself',
+      '臨時使用：自行選擇歸還的日期與時間': 'Temporary use: choose the return date and time yourself',
       '歸還日期 *': 'Return date *', '歸還時間 *': 'Return time *', '歸還方式 *': 'Return method *', '選擇歸還日期': 'Choose return date',
       '24 小時制，例如 17:30。也可以直接輸入。': '24-hour format, e.g. 17:30. You can also type it in.',
       '下課時間超過下午 5 點（院辦已下班）時，請把借用品投入歸還箱，謝謝。':
@@ -3105,7 +3105,7 @@
       '登記成功': 'Done', '借用登記成功': 'Loan registered', '再登記一筆': 'Register another', '確認': 'OK',
       '請至少選擇一項借用品。': 'Please select at least one item.', '請至少選擇一項預約借用品。': 'Please select at least one item.',
       '請選擇歸還方式。': 'Please choose a return method.', '請選擇歸還日期。': 'Please choose a return date.', '請選擇歸還時間。': 'Please choose a return time.',
-      '請在第 2 步選擇今天的課程，或改選「非課程使用」。': 'Choose today\'s class in step 2, or switch to "Not for class".',
+      '請在第 2 步選擇今天的課程，或改選「臨時使用」。': 'Choose today\'s class in step 2, or switch to "Temporary use".',
       '請在第 2 步選擇課堂。': 'Choose a class in step 2.',
       '請完成：': 'Please complete:', '暫時無法借用或預約，請詢問管理學院院辦人員。': 'Borrowing and reservations are temporarily unavailable. Please ask the College of Management Office.',
       // 提前預約
@@ -3169,10 +3169,12 @@
       [/^提前預約成功$/, 'Reserved'],
       [/^今天 (\d{1,2}:\d{2}) 前歸還（投入歸還箱）$/, 'Return by $1 today (drop box)'],
       [/^今天 (\d{1,2}:\d{2}) 前歸還$/, 'Return by $1 today'],
-      [/^(\d{4}\/\d{2}\/\d{2}) (\d{1,2}:\d{2}) 前（非課程使用）$/, 'By $1 $2 (not for class)'],
+      [/^(\d{4}\/\d{2}\/\d{2}) (\d{1,2}:\d{2}) 前（臨時使用）$/, 'By $1 $2 (temporary use)'],
       [/^(\d{4}\/\d{2}\/\d{2}) (\d{1,2}:\d{2}) 前$/, 'By $1 $2'],
       [/^今天 (\d{1,2}:\d{2}) 前（(.+)，(?:最後一堂 )?(\d{1,2}:\d{2}) 下課(，投入歸還箱)?）$/,
         (m, t, c, e, d) => `By ${t} today (${c}, ends ${e}${d ? ', drop box' : ''})`],
+      // V2.5.11：臨時使用（舊資料為「非課程使用」）的歸還文字整句翻譯
+      [/^(\d{4}-\d{2}-\d{2}) (\d{1,2}:\d{2}) 前｜(?:臨時使用|非課程使用)$/, 'By $1 $2 | Temporary use'],
       [/^(\d{4}-\d{2}-\d{2}) (\d{1,2}:\d{2}) 前｜(.*)$/, 'By $1 $2 | $3'],
       [/^庫存更新：(.+)$/, 'Stock updated: $1'],
       [/^庫存更新失敗：(.+)$/, 'Stock update failed: $1'],
@@ -3207,11 +3209,12 @@
       ['最後一堂 ', 'last class '], [' 下課', ' ends'], [' 結束，結束後 ', ' ends; return within '],
       ['預約的教室必須是所選課堂的教室', 'The classroom must be the one where your class takes place'],
       ['預約的教室必須是課堂所在的教室', 'The classroom must be the one where your class takes place'],
-      ['上課使用只能借所選課程教室的鑰匙與遙控器；要借其他教室請改選「非課程使用」。',
-        'For class use you can only borrow the key and remote for your class\'s classroom. To borrow another room, choose "Not for class".'],
+      ['「學校系統已預約」只能借所選課程教室的鑰匙與遙控器；要借其他教室請改選「臨時使用」。',
+        'With "Booked in school system" you can only borrow the key and remote for your class\'s classroom. To borrow another room, choose "Temporary use".'],
       ['同一間教室且時段重疊，請只選一堂。', 'are in the same classroom at overlapping times. Please choose only one.'],
       ['已經下課，無法預約。', 'has already ended and cannot be reserved.'],
-      ['找不到你選的課程，課程可能剛異動。請重新整理頁面，或改選「非課程使用」。', 'Your class could not be found; it may have just changed. Refresh the page or choose "Not for class".'],
+      ['目前讀不到課程資料，請改選「臨時使用」並自行選擇歸還時間。', 'Class data is unavailable right now. Choose "Temporary use" and pick the return time yourself.'],
+      ['找不到你選的課程，課程可能剛異動。請重新整理頁面，或改選「臨時使用」。', 'Your class could not be found; it may have just changed. Refresh the page or choose "Temporary use".'],
       ['找不到你選的課堂，課程可能剛異動。請重新整理頁面後再選。', 'Your class could not be found; it may have just changed. Please refresh and choose again.'],
       ['以下教室在課堂時段已有預約：', 'These classrooms are already reserved at that time: '],
       ['預計歸還時間最多只能選 180 天內。', 'The return date must be within 180 days.'],

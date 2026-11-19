@@ -686,6 +686,8 @@ const kdFrame=document.getElementById('kdFrame');
 /* 載入（或重新載入）借用表單；重新載入 = 清空上一位使用者填的所有內容 */
 function kdLoadFrame(){
   kdLoaded=true;
+  // 公用觸控電腦：每次重新載入都回到中文，不沿用上一位學生切換的 EN（同網域共用 localStorage 的 keysLang）
+  try{localStorage.removeItem('keysLang');}catch(e){}
   kdFrame.hidden=true;
   document.getElementById('kdLoading').hidden=false;
   kdFrame.src=KD_URL+'&t='+Date.now();

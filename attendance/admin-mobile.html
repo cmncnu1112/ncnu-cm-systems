@@ -2705,6 +2705,34 @@ tr.row-void td:last-child,tr.row-void td:nth-child(7){text-decoration:none}
 .w-empty{display:grid;gap:4px;padding:28px 12px;text-align:center;color:var(--muted)}
 .w-empty b{color:var(--text)}
 @media(max-width:700px){.w-stats{grid-template-columns:1fr 1fr}.w-filter{grid-template-columns:1fr}}
+/* V10.8 人員帳號：批次工具列、封存、批次修改視窗；CSV 下載替代方式 */
+.w-stats{grid-template-columns:repeat(5,minmax(0,1fr))}
+.w-filter{grid-template-columns:1fr 200px}
+.w-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:10px 12px;background:var(--panel2,#f4f4f4)}
+.w-bulk .spacer{flex:1}
+.w-bulk label{display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer}
+.w-bulk button:disabled{opacity:.45;cursor:not-allowed}
+.w-check-col{width:36px;text-align:center}
+.w-check,.w-bulk input[type=checkbox],.w-status-end input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.w-card-check{display:flex;align-items:center;gap:10px;cursor:pointer}
+.w-row-archive td{background:#f2f4f8;color:var(--muted)}
+.mobile-record-card.w-row-archive{opacity:.8}
+.w-badge-archive{background:#e0e0e0!important;color:#525252!important}
+.w-bulk-dialog{max-width:720px!important}
+.w-bulk-fill{display:grid;grid-template-columns:1fr auto;gap:8px;margin:12px 0}
+.w-bulk-head,.w-bulk-row{display:grid;grid-template-columns:130px 1fr 150px;gap:8px;align-items:center}
+.w-bulk-head{font-size:12px;font-weight:700;color:var(--muted);padding:0 0 6px;border-bottom:1px solid var(--line)}
+.w-bulk-rows{max-height:52vh;overflow:auto;margin-bottom:14px}
+.w-bulk-row{padding:8px 0;border-bottom:1px solid var(--line)}
+.w-bulk-row input{min-height:40px;width:100%}
+.w-bulk-id{display:grid;gap:2px}.w-bulk-id small{color:var(--muted);font-size:11px}
+.w-status-end{display:flex;gap:10px;align-items:flex-start;margin:4px 0 14px;cursor:pointer}
+.w-status-end small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.csv-help-list{display:grid;gap:8px;margin:14px 0}
+.csv-help-list .btn{justify-content:center;text-align:center;text-decoration:none}
+.csv-help-text{width:100%;font-family:monospace;font-size:12px;margin-bottom:12px}
+.csv-help-btn{font-size:12px}
+@media(max-width:700px){.w-stats{grid-template-columns:1fr 1fr}.w-filter{grid-template-columns:1fr}.w-bulk-head{display:none}.w-bulk-row{grid-template-columns:1fr 1fr}.w-bulk-id{grid-column:1/-1}}
 /* 排班期間設定 */
 .period-archive-toggle:not(#_cb#_cb){margin-top:10px;min-height:34px!important;font-size:12px!important}
 .period-archived td{color:var(--muted)}
@@ -2799,13 +2827,23 @@ tr.row-void td:last-child,tr.row-void td:nth-child(7){text-decoration:none}
 <section id="workers" class="page">
 <div class="card w-card">
   <div class="w-head">
-    <div><h3>人員帳號</h3><p class="muted">工讀生名單集中管理：新增人員、修改姓名、重設 PIN，以及黑名單停用。</p></div>
+    <div><h3>人員帳號</h3><p class="muted">工讀生名單集中管理：新增人員、修改姓名、重設 PIN、黑名單停用；不做的學生請「封存」，清單就不會再顯示。可以勾選多人批次處理。</p></div>
     <button class="btn primary" onclick="v10WorkerDialog('')">＋ 新增人員</button>
   </div>
   <div class="w-stats" id="wStats"></div>
   <div class="w-filter">
     <input id="wSearch" oninput="renderWorkerTable()" placeholder="搜尋姓名 / 學號">
-    <select id="wStatus" onchange="renderWorkerTable()"><option value="ALL">全部狀態</option><option value="WHITE">白名單</option><option value="BLACK">黑名單</option></select>
+    <select id="wStatus" onchange="renderWorkerTable()"><option value="ACTIVE">在職人員（不含封存）</option><option value="WHITE">白名單</option><option value="BLACK">黑名單</option><option value="ARCHIVE">已封存</option><option value="ALL">全部（含封存）</option></select>
+  </div>
+  <!-- V10.8：批次工具列 -->
+  <div class="w-bulk">
+    <label><input type="checkbox" id="wCheckAll" onchange="v10WorkerCheckAll(this.checked)">全選目前清單</label>
+    <span class="muted" id="wCheckedCount">尚未勾選</span>
+    <span class="spacer"></span>
+    <button class="btn" data-need-check onclick="v10WorkerBulkEdit()">批次修改</button>
+    <button class="btn" data-need-check onclick="v10WorkerBulkArchive()">封存</button>
+    <button class="btn" data-need-check onclick="v10WorkerBulkWhite()">移回白名單</button>
+    <button class="btn danger" data-need-check onclick="v10WorkerBulkBlack()">加入黑名單</button>
   </div>
   <div id="workerTable"></div>
 </div>
@@ -2876,6 +2914,7 @@ tr.row-void td:last-child,tr.row-void td:nth-child(7){text-decoration:none}
     <button class="btn" onclick="v10ConfirmAllPending()">確認全部待確認</button>
     <a class="btn csv-download-btn" href="#" target="_self" onclick="return exportPayroll(event,this,'detail')">匯出明細 CSV</a>
     <a class="btn csv-download-btn" href="#" target="_self" onclick="return exportPayroll(event,this,'summary')">匯出統計 CSV</a>
+    <button class="btn csv-help-btn" type="button" onclick="v10CsvHelp()">下載沒反應？</button>
     <button class="btn" id="payLockBtn" onclick="v10ToggleMonthLock()">鎖定本月</button>
   </div>
 </div>
@@ -2922,6 +2961,33 @@ tr.row-void td:last-child,tr.row-void td:nth-child(7){text-decoration:none}
 </section>
 
 </main></div>
+<!-- V10.8：人員批次修改 -->
+<dialog id="workerBulkDialog" class="picker-dialog v10-dialog w-bulk-dialog">
+  <div class="dialog-head"><div><h2>批次修改人員</h2><div class="muted" id="wBulkSub"></div></div><button class="dialog-x" onclick="$('workerBulkDialog').close()" aria-label="關閉">×</button></div>
+  <div class="w-bulk-fill"><input id="wBulkPinAll" inputmode="numeric" maxlength="8" placeholder="全部套用同一組 PIN（選填）"><button class="btn" onclick="v10WorkerBulkFillPin()">套用到全部</button></div>
+  <div class="w-bulk-head"><span>學號</span><span>姓名</span><span>重設 PIN</span></div>
+  <div class="w-bulk-rows" id="wBulkRows"></div>
+  <div class="dialog-actions"><button class="btn" onclick="$('workerBulkDialog').close()">取消</button><button class="btn primary" onclick="v10WorkerBulkEditOk()">儲存變更</button></div>
+</dialog>
+<!-- V10.8：封存／加入黑名單（批次與單筆共用） -->
+<dialog id="workerStatusDialog" class="picker-dialog v10-dialog">
+  <div class="dialog-head"><div><h2 id="wStatusTitle">封存人員</h2><div class="muted" id="wStatusSub"></div></div><button class="dialog-x" onclick="$('workerStatusDialog').close()" aria-label="關閉">×</button></div>
+  <div class="hint" id="wStatusHint"></div>
+  <label class="field" id="wStatusNoteLabel">備註<textarea id="wStatusNote" rows="2"></textarea></label>
+  <label class="w-status-end" id="wStatusEndWrap"><input type="checkbox" id="wStatusEnd" checked><span>一併結束今天以後的排班（建議勾選）<small>排班的結束日期改成昨天，還沒開始的排班直接停用；過去的紀錄不受影響。</small></span></label>
+  <div class="dialog-actions"><button class="btn" onclick="$('workerStatusDialog').close()">取消</button><button class="btn primary" id="wStatusOk" onclick="v10WorkerStatusOk()">確認</button></div>
+</dialog>
+<!-- V10.8：CSV 下載沒反應時的替代方式 -->
+<dialog id="csvHelpDialog" class="picker-dialog v10-dialog">
+  <div class="dialog-head"><div><h2>下載沒反應？</h2><div class="muted">後台嵌在中控系統裡時，瀏覽器可能會擋下載，可以改用下面任一種方式。</div></div><button class="dialog-x" onclick="$('csvHelpDialog').close()" aria-label="關閉">×</button></div>
+  <div class="csv-help-list">
+    <button class="btn primary" onclick="v10CsvRetry()">再試一次（在新分頁下載）</button>
+    <a class="btn" id="csvOpenAdmin" href="#" target="_blank" rel="noopener">在新分頁開啟後台再匯出（可能需要重新登入）</a>
+    <button class="btn" onclick="v10CsvCopy()">複製表格內容，貼到 Excel 會自動分欄</button>
+  </div>
+  <textarea id="csvHelpText" class="hidden csv-help-text" rows="6" readonly></textarea>
+  <div class="dialog-actions"><button class="btn" onclick="$('csvHelpDialog').close()">關閉</button></div>
+</dialog>
 <dialog id="workerDialog" class="picker-dialog v10-dialog">
   <div class="dialog-head"><div><h2 id="wDialogTitle">新增人員</h2><div class="muted" id="wDialogSub"></div></div><button class="dialog-x" onclick="$('workerDialog').close()" aria-label="關閉">×</button></div>
   <label class="field">姓名<input id="wDName" placeholder="姓名"></label>
@@ -3826,7 +3892,7 @@ let V10_SHIFTS=[
   {code:'PM',label:'下午班',start:'13:00',end:'17:00',hours:4}
 ];
 Object.assign(WRITE_ACTION_MESSAGES,{
-  confirmHours:'正在確認工時…',adjustHours:'正在調整工時…',voidHours:'正在作廢工時…',
+  confirmHours:'正在確認工時…',adjustHours:'正在調整工時…',voidHours:'正在作廢工時…',restoreHours:'正在復原工時…',
   rebuildPayrollRange:'正在重新計算工時…',setHoursMonthLock:'正在更新月結鎖定…',
   adminFixAttendance:'正在修正出勤…',savePunchLocation:'正在校準打卡位置…',savePunchGeoOptions:'正在儲存打卡設定…'
 });
@@ -3966,7 +4032,8 @@ function renderPayroll(){
   // 明細
   const act=r=>{
     if(r.locked)return '<span class="badge">已鎖定</span>';
-    if(r.status==='已作廢')return '—';
+    // V10.7：作廢的工時可以復原為待確認
+    if(r.status==='已作廢')return `<div class="review-actions"><button class="btn" onclick="v10HourDialog('restore','${esc(r.calcId)}')">復原</button></div>`;
     return `<div class="review-actions">${r.status==='待確認'?`<button class="btn primary" onclick="v10Confirm(['${esc(r.calcId)}'])">確認</button>`:''}<button class="btn" onclick="v10HourDialog('adjust','${esc(r.calcId)}')">調整</button><button class="btn danger" onclick="v10HourDialog('void','${esc(r.calcId)}')">作廢</button></div>`;
   };
   const chk=r=>r.status==='待確認'&&!r.locked?`<input class="schedule-check pay-check" type="checkbox" value="${esc(r.calcId)}">`:'';
@@ -4003,19 +4070,20 @@ let v10HourAction=null;
 function v10HourDialog(kind,id){
   const r=(payData.rows||[]).find(x=>x.calcId===id);if(!r)return;
   v10HourAction={kind:kind,id:id};
-  $('hourDialogTitle').textContent=kind==='adjust'?'調整工時':'作廢工時';
+  $('hourDialogTitle').textContent=kind==='adjust'?'調整工時':kind==='restore'?'復原作廢':'作廢工時';
   $('hourDialogTarget').textContent=r.name+'｜'+r.date+'｜'+(r.shift||'')+'｜目前 '+v10Hours(r.hours)+' 小時';
   $('hourDialogHoursWrap').classList.toggle('hidden',kind!=='adjust');
   $('hourDialogHours').value=v10Hours(r.hours);$('hourDialogNote').value='';
-  $('hourDialogOk').textContent=kind==='adjust'?'確認調整':'確認作廢';
-  $('hourDialogOk').className='btn '+(kind==='adjust'?'primary':'danger');
+  $('hourDialogOk').textContent=kind==='adjust'?'確認調整':kind==='restore'?'復原為待確認':'確認作廢';
+  $('hourDialogOk').className='btn '+(kind==='void'?'danger':'primary');
   $('hourDialog').showModal();
 }
 function v10HourDialogOk(){
   const a=v10HourAction;if(!a)return;const note=$('hourDialogNote').value.trim();
-  if(!note)return toast(a.kind==='adjust'?'請填寫調整原因':'請填寫作廢原因');
+  if(!note)return toast(a.kind==='adjust'?'請填寫調整原因':a.kind==='restore'?'請填寫復原原因':'請填寫作廢原因');
   $('hourDialog').close();
   if(a.kind==='adjust')call('adjustHours',[a.id,Number($('hourDialogHours').value),note],(_,m)=>toast(m));
+  else if(a.kind==='restore')call('restoreHours',[a.id,note],(_,m)=>toast(m));
   else call('voidHours',[a.id,note],(_,m)=>toast(m));
 }
 function collectPayroll(){return v10PayFiltered().filter(r=>r.status!=='已作廢')}
@@ -4139,7 +4207,7 @@ function v10OnPageShown(id){
 function silentRefreshAfterWrite(fn,finish,fail){
   load(()=>{
     const jobs=[];
-    if(payData.loaded&&['confirmHours','adjustHours','voidHours','rebuildPayrollRange','setHoursMonthLock','adminFixAttendance','reviewMakeup','reviewLeave'].includes(fn))jobs.push(loadPayroll);
+    if(payData.loaded&&['confirmHours','adjustHours','voidHours','restoreHours','rebuildPayrollRange','setHoursMonthLock','adminFixAttendance','reviewMakeup','reviewLeave'].includes(fn))jobs.push(loadPayroll);
     if(attAdmin.loaded&&['adminFixAttendance','reviewMakeup','reviewLeave','voidHours','adjustHours','setHoursMonthLock'].includes(fn))jobs.push(loadAttendance);
     const next=()=>{const j=jobs.shift();if(!j)return finish&&finish();j(next,fail)};
     next();
@@ -4290,6 +4358,254 @@ function v10WorkerDialogOk(){
   if(!/^\d{4,8}$/.test(pin))return toast('PIN 請設定 4～8 位數字');
   $('workerDialog').close();
   call('saveWorker',[{name:name,studentId:sid,pin:pin,role:'worker'}],(_,m)=>toast(m));
+}
+
+/* =====================================================================
+   V10.8 人員帳號：批次修改與封存
+   ---------------------------------------------------------------------
+   1. 名單分三種：白名單（可登入、可排班）、黑名單（停用，必填原因）、封存（已不做的學生）
+   2. 清單預設只顯示「在職」（白名單＋黑名單），封存的人要切換篩選才看得到
+   3. 勾選多位人員後可以：批次修改姓名／PIN、封存、移回白名單（含取消封存）、加入黑名單
+   4. 封存時預設把該員今天以後的排班結束掉（結束日期改成昨天），過去的打卡、排班、工時都保留
+   本段放在主程式初始化之前，同名函式會取代舊版（JavaScript 以最後一次宣告為準）。
+   ===================================================================== */
+Object.assign(WRITE_ACTION_MESSAGES,{batchUpdateWorkers:'正在批次修改人員…',setWorkersStatus:'正在更新人員狀態…'});
+/** 目前勾選的學號 */
+let v10WorkerChecked=new Set();
+/** 人員目前的名單類型：白名單／黑名單／封存 */
+function v10WorkerList_(w){
+  const t=(w&&w.listType)||'';
+  if(t==='封存')return '封存';
+  if(t==='黑名單'||enabledLabel(w.active)==='停用')return '黑名單';
+  return '白名單';
+}
+function v10WorkerIsArchived(w){return v10WorkerList_(w)==='封存'}
+function v10WorkerIsBlack(w){return v10WorkerList_(w)==='黑名單'}
+function v10WorkerAll_(){return (data.workers||[]).filter(w=>w.role!=='admin')}
+function v10WorkerById_(sid){return v10WorkerAll_().find(w=>w.studentId===sid)||null}
+
+function renderWorkers(){
+  const all=v10WorkerAll_();
+  const white=all.filter(w=>v10WorkerList_(w)==='白名單'),black=all.filter(v10WorkerIsBlack),archived=all.filter(v10WorkerIsArchived);
+  const scheduled=white.filter(w=>v10WorkerWeekly(w.studentId)>0);
+  if($('wStats'))$('wStats').innerHTML=[['在職人員',white.length+black.length,'人'],['白名單',white.length,'人'],['黑名單',black.length,'人'],['已封存',archived.length,'人'],['本學期有排班',scheduled.length,'人']]
+    .map(x=>`<div class="w-stat"><span>${x[0]}</span><b>${x[1]}<small>${x[2]}</small></b></div>`).join('');
+  renderWorkerTable();
+}
+/** 依搜尋與篩選條件取得目前清單 */
+function v10WorkerFiltered_(){
+  const q=($('wSearch')?.value||'').trim().toLowerCase(),st=$('wStatus')?.value||'ACTIVE';
+  return v10WorkerAll_().filter(w=>{
+    const l=v10WorkerList_(w);
+    if(q&&!(`${w.name} ${w.studentId}`.toLowerCase().includes(q)))return false;
+    if(st==='ACTIVE'&&l==='封存')return false;
+    if(st==='WHITE'&&l!=='白名單')return false;
+    if(st==='BLACK'&&l!=='黑名單')return false;
+    if(st==='ARCHIVE'&&l!=='封存')return false;
+    return true;
+  }).sort((a,b)=>{
+    const o={'白名單':0,'黑名單':1,'封存':2};
+    return o[v10WorkerList_(a)]-o[v10WorkerList_(b)]||String(a.name).localeCompare(String(b.name),'zh-Hant');
+  });
+}
+function renderWorkerTable(){
+  const box=$('workerTable');if(!box)return;
+  const list=v10WorkerFiltered_();
+  // 只保留目前清單裡看得到的勾選，避免對隱藏的人員動作
+  const visible=new Set(list.map(w=>w.studentId));
+  v10WorkerChecked=new Set([...v10WorkerChecked].filter(id=>visible.has(id)));
+  v10WorkerBulkBar_(list);
+  if(!list.length){box.innerHTML='<div class="w-empty"><b>找不到符合的人員</b><span>請調整搜尋或篩選條件；已封存的人員要在篩選選「已封存」才會出現。</span></div>';return}
+  const badge=w=>{const l=v10WorkerList_(w);return l==='黑名單'?'<span class="badge bad">黑名單</span>':l==='封存'?'<span class="badge w-badge-archive">已封存</span>':'<span class="badge">白名單</span>'};
+  const pin=w=>w.pin==='已設定'?'已設定':'<span class="badge warn">未設定</span>';
+  const reason=w=>{const l=v10WorkerList_(w);if(l==='黑名單')return esc(w.blacklistReason||'未填寫原因（舊資料）');if(l==='封存')return esc(w.blacklistReason||'—');return '—'};
+  const act=w=>{
+    const l=v10WorkerList_(w),sid=esc(w.studentId);
+    let b=`<button class="btn" onclick="v10WorkerDialog('${sid}')">編輯</button>`;
+    if(l==='封存')b+=`<button class="btn" onclick="v10WorkerStatusQuick('${sid}','white')">取消封存</button>`;
+    else if(l==='黑名單')b+=`<button class="btn" onclick="restoreWorker('${sid}')">移回白名單</button><button class="btn" onclick="v10WorkerStatusDialog('archive',['${sid}'])">封存</button>`;
+    else b+=`<button class="btn" onclick="v10WorkerStatusDialog('archive',['${sid}'])">封存</button><button class="btn danger" onclick="openBlacklistDialog('${sid}')">加入黑名單</button>`;
+    return `<div class="review-actions">${b}</div>`;
+  };
+  const chk=w=>`<input type="checkbox" class="w-check" ${v10WorkerChecked.has(w.studentId)?'checked':''} onchange="v10WorkerToggle('${esc(w.studentId)}',this.checked)" aria-label="勾選 ${esc(w.name)}">`;
+  const rowCls=w=>{const l=v10WorkerList_(w);return l==='黑名單'?'w-row-black':l==='封存'?'w-row-archive':''};
+  box.innerHTML=V10_MOBILE
+    ?`<div class="mobile-record-list">${list.map(w=>`<article class="mobile-record-card ${rowCls(w)}"><div class="mobile-record-head"><label class="w-card-check">${chk(w)}<div><b>${esc(w.name)}</b><span>${esc(w.studentId)}</span></div></label>${badge(w)}</div><div class="mobile-record-grid two-col"><div class="mobile-record-field"><span>每週排班</span><b>${v10Hours(v10WorkerWeekly(w.studentId))} 小時</b></div><div class="mobile-record-field"><span>登入 PIN</span><b>${pin(w)}</b></div>${v10WorkerList_(w)!=='白名單'?`<div class="mobile-record-field full"><span>${v10WorkerIsArchived(w)?'封存備註':'黑名單原因'}</span><b>${reason(w)}</b></div>`:''}</div><div class="mobile-review-actions">${act(w)}</div></article>`).join('')}</div>`
+    :`<div class="scroll"><table><thead><tr><th class="w-check-col"></th><th>人員</th><th>每週排班</th><th>登入 PIN</th><th>狀態</th><th>原因／備註</th><th>管理</th></tr></thead><tbody>${list.map(w=>`<tr class="${rowCls(w)}"><td class="w-check-col">${chk(w)}</td><td><b>${esc(w.name)}</b><div class="muted">${esc(w.studentId)}</div></td><td>${v10Hours(v10WorkerWeekly(w.studentId))} 小時</td><td>${pin(w)}</td><td>${badge(w)}</td><td class="source">${reason(w)}</td><td>${act(w)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+/** 批次工具列：顯示勾選人數，全選框跟著目前清單 */
+function v10WorkerBulkBar_(list){
+  const n=v10WorkerChecked.size,all=$('wCheckAll');
+  if($('wCheckedCount'))$('wCheckedCount').textContent=n?('已勾選 '+n+' 人'):'尚未勾選';
+  if(all){all.checked=!!list.length&&n===list.length;all.indeterminate=n>0&&n<list.length}
+  document.querySelectorAll('.w-bulk [data-need-check]').forEach(b=>b.disabled=!n);
+}
+function v10WorkerToggle(sid,on){on?v10WorkerChecked.add(sid):v10WorkerChecked.delete(sid);v10WorkerBulkBar_(v10WorkerFiltered_())}
+function v10WorkerCheckAll(on){v10WorkerChecked=on?new Set(v10WorkerFiltered_().map(w=>w.studentId)):new Set();renderWorkerTable()}
+function v10WorkerCheckedList_(){return [...v10WorkerChecked].map(v10WorkerById_).filter(Boolean)}
+
+/* ----- 批次修改姓名／PIN ----- */
+function v10WorkerBulkEdit(){
+  const ws=v10WorkerCheckedList_();if(!ws.length)return toast('請先勾選要修改的人員');
+  $('wBulkSub').textContent='共 '+ws.length+' 人。學號不能修改；PIN 留空表示不變更。';
+  $('wBulkPinAll').value='';
+  $('wBulkRows').innerHTML=ws.map(w=>`<div class="w-bulk-row" data-sid="${esc(w.studentId)}"><div class="w-bulk-id"><b>${esc(w.studentId)}</b><small>${esc(v10WorkerList_(w))}</small></div><input class="w-bulk-name" value="${esc(w.name)}" placeholder="姓名"><input class="w-bulk-pin" inputmode="numeric" maxlength="8" placeholder="PIN 不變更"></div>`).join('');
+  $('workerBulkDialog').showModal();
+}
+/** 把同一組 PIN 填進所有人（例如期初統一重設） */
+function v10WorkerBulkFillPin(){
+  const p=$('wBulkPinAll').value.trim();
+  if(p&&!/^\d{4,8}$/.test(p))return toast('PIN 請設定 4～8 位數字');
+  document.querySelectorAll('#wBulkRows .w-bulk-pin').forEach(i=>i.value=p);
+}
+function v10WorkerBulkEditOk(){
+  const items=[];let bad='';
+  document.querySelectorAll('#wBulkRows .w-bulk-row').forEach(r=>{
+    const sid=r.dataset.sid,name=r.querySelector('.w-bulk-name').value.trim(),pin=r.querySelector('.w-bulk-pin').value.trim(),w=v10WorkerById_(sid);
+    if(!name&&!bad)bad=sid+' 的姓名不能空白';
+    if(pin&&!/^\d{4,8}$/.test(pin)&&!bad)bad=sid+' 的 PIN 請設定 4～8 位數字，或留空';
+    if(w&&(name!==String(w.name).trim()||pin))items.push({studentId:sid,name:name,pin:pin});
+  });
+  if(bad)return toast(bad);
+  if(!items.length)return toast('沒有任何變更');
+  $('workerBulkDialog').close();
+  call('batchUpdateWorkers',[items],(_,m)=>{v10WorkerChecked.clear();toast(m)});
+}
+
+/* ----- 封存／加入黑名單（批次與單筆共用同一個視窗） ----- */
+let v10WorkerStatusMode={mode:'',ids:[]};
+function v10WorkerStatusDialog(mode,ids){
+  ids=(ids||[]).filter(id=>v10WorkerById_(id));
+  if(!ids.length)return toast('請先勾選人員');
+  // 已經是目標狀態的人就略過，避免重複寫入
+  ids=ids.filter(id=>{const l=v10WorkerList_(v10WorkerById_(id));return mode==='archive'?l!=='封存':l!=='黑名單'});
+  if(!ids.length)return toast(mode==='archive'?'勾選的人員都已經封存':'勾選的人員都已經在黑名單');
+  v10WorkerStatusMode={mode:mode,ids:ids};
+  const names=ids.map(id=>v10WorkerById_(id).name);
+  const isArc=mode==='archive';
+  $('wStatusTitle').textContent=isArc?'封存人員':'加入黑名單';
+  $('wStatusSub').textContent=(names.length>6?names.slice(0,6).join('、')+' 等 '+names.length+' 人':names.join('、'));
+  $('wStatusHint').textContent=isArc
+    ?'封存後無法登入打卡，也不會出現在排班、代班、指派名單；人員清單預設不顯示。過去的打卡、排班與工時全部保留，之後可以隨時取消封存。'
+    :'加入黑名單後無法登入打卡，也不會出現在排班、代班、指派名單。原因必填，會顯示在人員清單。';
+  $('wStatusNoteLabel').firstChild.textContent=isArc?'封存備註（選填，例如：115-1 學期結束）':'加入黑名單原因（必填）';
+  $('wStatusNote').value='';
+  $('wStatusEndWrap').classList.toggle('hidden',!isArc);
+  $('wStatusEnd').checked=true;
+  $('wStatusOk').textContent=isArc?'確認封存 '+ids.length+' 人':'確認加入黑名單';
+  $('wStatusOk').className='btn '+(isArc?'primary':'danger');
+  $('workerStatusDialog').showModal();
+}
+function v10WorkerStatusOk(){
+  const m=v10WorkerStatusMode,note=$('wStatusNote').value.trim();
+  if(m.mode==='black'&&!note)return toast('請填寫加入黑名單的原因');
+  $('workerStatusDialog').close();
+  call('setWorkersStatus',[m.ids,m.mode,{reason:note,endSchedules:m.mode==='archive'&&$('wStatusEnd').checked}],(_,msg)=>{v10WorkerChecked.clear();toast(msg)});
+}
+function v10WorkerBulkArchive(){v10WorkerStatusDialog('archive',[...v10WorkerChecked])}
+function v10WorkerBulkBlack(){v10WorkerStatusDialog('black',[...v10WorkerChecked])}
+/** 批次移回白名單（含取消封存）；排班不會自動恢復，需要時到「學期值班表」重新建立 */
+function v10WorkerBulkWhite(){
+  const ids=[...v10WorkerChecked].filter(id=>{const w=v10WorkerById_(id);return w&&v10WorkerList_(w)!=='白名單'});
+  if(!ids.length)return toast(v10WorkerChecked.size?'勾選的人員都已經是白名單':'請先勾選人員');
+  v10WorkerStatusQuick(ids,'white');
+}
+function v10WorkerStatusQuick(ids,mode){
+  ids=Array.isArray(ids)?ids:[ids];
+  const names=ids.map(id=>(v10WorkerById_(id)||{}).name).filter(Boolean);
+  uiConfirm('確定把 '+(names.length>6?names.slice(0,6).join('、')+' 等 '+names.length+' 人':names.join('、'))+' 移回白名單？\n移回後可以登入打卡；之前結束的排班不會自動恢復，需要時請到「學期值班表」重新建立。',{title:'移回白名單',okText:'移回白名單'})
+    .then(ok=>{if(ok)call('setWorkersStatus',[ids,mode,{}],(_,m)=>{v10WorkerChecked.clear();toast(m)})});
+}
+
+/* =====================================================================
+   V10.8 CSV 下載：後台被嵌在其他網頁（例如中控系統）裡也能下載
+   ---------------------------------------------------------------------
+   瀏覽器會擋下「嵌在別人網頁 iframe 裡」直接產生的下載，中控系統嵌入本後台就是這種情況。
+   1. 單獨開啟後台：沿用 Blob 直接下載，檔名保留中文
+   2. 被嵌在其他網頁裡：用表單 POST 到本系統網址，在新分頁下載（新分頁不受 iframe 限制）。
+      後端 legacyCsvDoPost_ 會先驗證管理員通行證，再用 ContentService 回傳檔案；
+      新分頁是本系統的下載頁（csvDownloadPage_），載入後自動下載，檔名保留中文
+   3. 新分頁也被擋時，按「下載沒反應？」可以複製 CSV 內容，或在新分頁開啟後台再匯出
+   ===================================================================== */
+let v10LastCsv=null;
+/** 是否被嵌在其他網頁裡。Apps Script 本身就有兩層外框，超過兩層代表被別的網頁嵌入 */
+function v10IsEmbedded(){
+  // GitHub Pages 版沒有 Apps Script 外框：只要在 iframe 裡就算被嵌入
+  try{return window.self!==window.top}catch(e){return true}
+}
+/** 產生 CSV 內容；資料不足時回傳 null 並提示 */
+function v10BuildPayrollCsv(kind){
+  if(!payData.loaded){toast('請先載入工時');return null}
+  const rows=collectPayroll();
+  if(!rows.length){toast('沒有可匯出的工時');return null}
+  let body;
+  if(kind==='summary'){
+    body=[['工讀生姓名','學號','起始日期','結束日期','已確認時數','待確認時數','合計時數']];
+    const by={};rows.forEach(r=>{const k=r.studentId;(by[k]=by[k]||{name:r.name,sid:k,c:0,p:0});if(r.status==='待確認')by[k].p+=Number(r.hours||0);else by[k].c+=Number(r.hours||0)});
+    Object.values(by).sort((a,b)=>String(a.name).localeCompare(String(b.name),'zh-Hant')).forEach(p=>body.push([p.name,p.sid,$('payFrom').value,$('payTo').value,v10Hours(p.c),v10Hours(p.p),v10Hours(p.c+p.p)]));
+  }else{
+    body=[['工讀生姓名','上班日期','上班時間（實際）','下班時間（實際）','小時數','學號','班別','狀態','說明']];
+    rows.forEach(r=>body.push([r.name,r.date,r.timeIn,r.timeOut,v10Hours(r.hours),r.studentId,r.shift,r.status,[r.source,r.note].filter(Boolean).join('｜')]));
+  }
+  const from=$('payFrom').value||'start',to=$('payTo').value||'end';
+  return {
+    kind:kind,
+    rows:body,   // V10.8.1：複製到 Excel 用（Tab 分隔）
+    csv:'\ufeff'+body.map(row=>row.map(csvCell).join(',')).join('\r\n'),
+    name:(kind==='summary'?'工讀生時數統計_':'工讀生工時明細_')+from+'_'+to+'.csv',
+    asciiName:'payroll_'+(kind==='summary'?'summary':'detail')+'_'+from+'_'+to+'.csv',
+    pending:rows.filter(r=>r.status==='待確認').length
+  };
+}
+function exportPayroll(event,link,kind){
+  const out=v10BuildPayrollCsv(kind);
+  if(!out){event&&event.preventDefault();return false}
+  v10LastCsv=out;
+  const pendText=out.pending?'（含 '+out.pending+' 筆待確認）':'';
+  if(!v10IsEmbedded()){
+    // 單獨開啟：由這一次點擊 <a download> 直接下載
+    releasePayrollCsvUrl_();
+    payrollCsvObjectUrl=URL.createObjectURL(new Blob([out.csv],{type:'text/csv;charset=utf-8'}));
+    link.href=payrollCsvObjectUrl;link.download=out.name;link.target='_self';
+    setTimeout(releasePayrollCsvUrl_,60000);
+    toast('CSV 下載中'+pendText);
+    return true;
+  }
+  event&&event.preventDefault();
+  v10PostCsvDownload(out);
+  toast('已在新分頁下載 CSV'+pendText+'；沒有反應請按「下載沒反應？」');
+  return false;
+}
+/** 用表單 POST 到本系統網址、在新分頁下載（token 放在表單內容，不會出現在網址上） */
+function v10PostCsvDownload(out){
+  // GitHub Pages 版：下載要送到 GAS 的 /exec（config.js 的 GAS_URL），由 legacyCsvDoPost_ 回傳檔案
+  const url=window.GAS_URL||'';
+  if(!url){toast('找不到後端網址，請改用「下載沒反應？」複製內容');return}
+  const f=document.createElement('form');
+  f.method='post';f.action=url;f.target='_blank';f.style.display='none';
+  [['action','downloadPayrollCsv'],['token',token],['filename',out.name],['csv',out.csv]].forEach(p=>{
+    const t=document.createElement('textarea');t.name=p[0];t.value=p[1];f.appendChild(t);
+  });
+  document.body.appendChild(f);f.submit();setTimeout(()=>f.remove(),1500);
+}
+/** 「下載沒反應？」：提供再試一次、在新分頁開啟後台、複製 CSV 內容三種方式 */
+function v10CsvHelp(){
+  $('csvOpenAdmin').href='./admin-mobile.html';   // GitHub Pages 版：直接開本頁
+  $('csvHelpText').classList.add('hidden');
+  $('csvHelpDialog').showModal();
+}
+function v10CsvRetry(){
+  const out=v10LastCsv||v10BuildPayrollCsv('detail');if(!out)return;
+  v10LastCsv=out;v10PostCsvDownload(out);toast('已重新送出下載');
+}
+function v10CsvCopy(){
+  const out=v10LastCsv||v10BuildPayrollCsv('detail');if(!out)return;
+  v10LastCsv=out;
+  const ta=$('csvHelpText');ta.value=out.rows.map(r=>r.map(v=>String(v??'').replace(/[\t\r\n]+/g,' ')).join('\t')).join('\n');   /* V10.8.1：用 Tab 分隔，貼到 Excel 會自動分欄 */ ta.classList.remove('hidden');ta.focus();ta.select();
+  let ok=false;try{ok=document.execCommand('copy')}catch(e){}
+  if(ok)return toast('已複製 '+(out.kind==='summary'?'統計':'明細')+' 表格，直接貼到 Excel 會自動分欄');
+  if(navigator.clipboard)navigator.clipboard.writeText(ta.value).then(()=>toast('已複製 CSV 內容，可以直接貼到 Excel 或試算表'),()=>toast('無法自動複製，請在下方文字框按 Ctrl+C'));
+  else toast('無法自動複製，請在下方文字框按 Ctrl+C');
 }
 
 buildWeekGrid();populateStaticSelects();setDefaultPayDates();batchRuleChanged();editRuleChanged();updateAdminIdentity(getCachedAdminIdentity());load();
